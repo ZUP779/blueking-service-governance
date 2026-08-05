@@ -1,0 +1,20 @@
+bkms-server/pkg/workload/appmodelcore/appspec/migrate/migrator.go
+  s_9bb05d84c4afb1::t_7e668575e155f7 77,84,95-160,167-171,178-182,184,190-216,218-235,241-242,247
+  s_9bb05d84c4afb1::t_5cb9639b3e3421 174-176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "e47cd57e528c9b92fd1d9023d6cf9a2100096b7b",
+  "prompts": {},
+  "sessions": {
+    "s_9bb05d84c4afb1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c2500cf9-074b-49ec-b194-a5385258315f",
+        "model": "grok-4.5"
+      },
+      "human_author": "zup779 <zup779@gmail.com>"
+    }
+  }
+}
