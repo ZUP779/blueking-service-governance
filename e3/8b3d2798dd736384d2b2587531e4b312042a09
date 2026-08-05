@@ -1,0 +1,46 @@
+bkms-server/pkg/workload/appmodelcore/appspec/migrate/migrator.go
+  s_9bb05d84c4afb1::t_d309c27f76aa21 1,18-21,32,62,66-69,73,77-79,84,87,93-100,102-108,111-115,126-133,135-138,142-145,148-152,155,158-159,161-163,166,168-169,171-173,179,183-191,193,196-199,201,203,205-208,210
+  h_f84a1c66e9587e 64
+  s_9bb05d84c4afb1::t_21ec09148a1d2b 11
+  s_9bb05d84c4afb1::t_5eee909efa343e 22-31
+  s_9bb05d84c4afb1::t_f37ffb1403530e 117-124
+  s_9bb05d84c4afb1::t_46011e22d8abdc 160,164,167,170,174-178,180
+  s_9bb05d84c4afb1::t_2fe003c0baf682 2-10,12-17,33-61,63,65,70-72,74-76,80-83,85-86,88-92,101,109-110,116,125,134,139-141,146-147,153-154,156-157,165,181-182,192,194-195,200,202,204,209,211
+bkms-server/pkg/core/workspace/comp_store.go
+  s_9bb05d84c4afb1::t_f73b030b0543fc 273
+bkms-server/pkg/workload/appmodelcore/appspec/migrate/migrator_test.go
+  s_9bb05d84c4afb1::t_258e7b0f2ad750 170
+  s_9bb05d84c4afb1::t_776b03ff9e4ed9 102
+  s_9bb05d84c4afb1::t_219affa6981e03 23,40,55-58,60-61,78-79,84,90,94-95,106-107,118,130,137,140-141,146,155-156,161-162
+  s_9bb05d84c4afb1::t_4c44894f2dcbb4 129
+  s_9bb05d84c4afb1::t_ac79ef17508cc8 1-22,24-39,41-54,59,62-77,80-83,85-89,91-93,96-101,103-105,108-117,119-128,131-133,135-136,138-139,142-145,147-154,157-160,163-169,171-172
+  s_9bb05d84c4afb1::t_435f1c3b7ee72d 134
+bkms-server/cmd/migration/migrate_tke_route_eni_component.go
+  s_9bb05d84c4afb1::t_e0cc575d8d1998 21,34,37,39-40,42,62,65,69,73,77,80
+  s_9bb05d84c4afb1::t_383c03fd5cb362 1-20,22-33,35-36,38,41,43-61,63-64,66-68,70-72,74-76,78-79,81-82
+bkms-server/pkg/workload/appmodelcore/appspec/migrate/migrate_suite_test.go
+  s_9bb05d84c4afb1::t_2f9eb27f81624c 1-27
+bkms-server/cmd/root.go
+  s_9bb05d84c4afb1::t_878265fbc0b913 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "e38b3d2798dd736384d2b2587531e4b312042a09",
+  "prompts": {},
+  "humans": {
+    "h_f84a1c66e9587e": {
+      "author": "zup779 <zup779@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_9bb05d84c4afb1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c2500cf9-074b-49ec-b194-a5385258315f",
+        "model": "grok-4.5"
+      },
+      "human_author": "zup779 <zup779@gmail.com>"
+    }
+  }
+}
