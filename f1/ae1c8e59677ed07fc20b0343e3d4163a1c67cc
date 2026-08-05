@@ -1,0 +1,31 @@
+bkms-server/pkg/workload/appmodelcore/appspec/migrate/migrator.go
+  s_9bb05d84c4afb1::t_6eaa7e9a5371f6 6,13,39,49,59,67-75,89-90,93,101-104,108,118-121,123,182-198
+  s_9bb05d84c4afb1::t_84ef89d8c3fd96 199
+bkms-server/cmd/migration/migrate_tke_route_eni_component.go
+  s_9bb05d84c4afb1::t_e13630c8ab0f1e 64-67,85
+  s_9bb05d84c4afb1::t_3da93ed3950542 13
+bkms-server/pkg/workload/appmodelcore/appspec/migrate/migrator_test.go
+  s_9bb05d84c4afb1::t_cbfdc65a392362 172-231
+  s_9bb05d84c4afb1::t_d5ccde814057b5 57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.20",
+  "base_commit_sha": "f1ae1c8e59677ed07fc20b0343e3d4163a1c67cc",
+  "prompts": {},
+  "humans": {
+    "h_f84a1c66e9587e": {
+      "author": "zup779 <zup779@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_9bb05d84c4afb1": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c2500cf9-074b-49ec-b194-a5385258315f",
+        "model": "grok-4.5"
+      },
+      "human_author": "zup779 <zup779@gmail.com>"
+    }
+  }
+}
