@@ -1,0 +1,104 @@
+bkms-server/pkg/extension/depservice/model/instance_store.go
+  s_7a8a47f3f3b2a0::t_84a150ae23509d 391,414-430,453-467
+  s_7a8a47f3f3b2a0::t_2255fc35bf2047 133,141-144,152-154
+  s_7a8a47f3f3b2a0::t_31aa9c3a030196 468
+bkms-server/pkg/extension/depservice/provider/types/types.go
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 22-23,63-65,68-72
+bkms-server/pkg/extension/depservice/provider/polaris/provider.go
+  s_7a8a47f3f3b2a0::t_29ad778a6b55f6 122-124,136-137
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 79-80,101,105,110,121,125,127-128,130,139-140,142
+bkms-server/pkg/extension/depservice/provider/redis/params.go
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 1-82
+bkms-server/pkg/server/taskqtask/redistask/disable.go
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 1-42,48,62-63,95-113
+  s_7a8a47f3f3b2a0::t_8b518ad52ac50e 43-47,49-61,64-78,80-94
+  s_7a8a47f3f3b2a0::t_7898011701d418 79
+bkms-server/pkg/server/taskqtask/redistask/create.go
+  s_7a8a47f3f3b2a0::t_01ef0f3f8cf23b 27,60-75,77-81,86-107,109-121,123-127,147-152
+  s_7a8a47f3f3b2a0::t_d4febe5028beda 146,158
+  s_7a8a47f3f3b2a0::t_4bd7c42ff97ba0 76,122
+  s_7a8a47f3f3b2a0::t_47721053a24266 108
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 1-26,28-59,82-84,128-145,153-157,159-170
+  s_7a8a47f3f3b2a0::t_c3ac310a6f7123 85
+bkms-server/pkg/infras/taskq/tasktype.go
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 26,46-70,100-112
+  s_7a8a47f3f3b2a0::t_c0ec90fc2cf7b4 113
+bkms-server/pkg/infras/taskq/server.go
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 97-98,111-115
+bkms-server/pkg/extension/depservice/provider/redis/provider.go
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 1-79,84-87,89-91,98-101
+  s_7a8a47f3f3b2a0::t_0cdbadc133aa11 81
+  s_7a8a47f3f3b2a0::t_3db493828901c5 80,82-83,88,92-97
+bkms-server/pkg/extension/depservice/model/instance.go
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 54-55
+bkms-server/pkg/infras/cloudapi/dbm/dbm.go
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 61,68
+bkms-server/pkg/extension/depservice/provider/provider.go
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 30,36-41,45,47,50,57-59,62,65,78-79
+bkms-server/pkg/server/taskqtask/redistask/destroy.go
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 1-43,48,54,60,63-66,98-108,110,116-118
+  s_7a8a47f3f3b2a0::t_d936eaf7bad145 44-47,49-53,55-59,61-62,67-79,81-97,109,111-115
+  s_7a8a47f3f3b2a0::t_9a3250fedaa96b 80
+bkms-server/pkg/server/taskqtask/redistask/register.go
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 1-64
+bkms-server/pkg/server/taskqtask/task.go
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 22-23,27,32,34,36,39-52,54
+bkms-server/pkg/extension/depservice/manager.go
+  s_7a8a47f3f3b2a0::t_690e66c886a219 164-170,206-212
+  s_7a8a47f3f3b2a0::t_25907bf4118443 122-123,128-129,156-157,171-174,187-188,200
+  s_7a8a47f3f3b2a0::t_8742ad42d056e2 238,240-243
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 32,76-78,92,106,114-121,124,133-134,158,185,191,199,201-202
+  s_7a8a47f3f3b2a0::t_52697c54be2a68 160
+  s_7a8a47f3f3b2a0::t_789e6c26dacbb7 69,75,105
+  s_7a8a47f3f3b2a0::t_f2045fe80901b5 159
+  s_7a8a47f3f3b2a0::t_3c89673fd8551e 213-214
+bkms-server/pkg/extension/depservice/depservice_suite_test.go
+  s_7a8a47f3f3b2a0::t_2fe0dbe2714e7d 26-27,34-45
+bkms-server/pkg/extension/depservice/manager_test.go
+  s_7a8a47f3f3b2a0::t_6848ce7f94ad3d 19,24,29-30,32,43-44,48,50,52,58-65,67-68,71-76,79,81-83,86-91,93-99,101-111,115-117,119,121-122,130-131,133-135,137-139,165-173,188-189,216,265
+  s_7a8a47f3f3b2a0::t_d24773d08a2a76 45-47,49
+  s_7a8a47f3f3b2a0::t_cb264241e6324d 34
+  s_7a8a47f3f3b2a0::t_fdcea9b1d00612 142,145-151,154,156
+  s_7a8a47f3f3b2a0::t_0a6a954e62f603 38-39,41-42,51,56-57,66,69-70,80,92,112,123,125-127,143,155,158,160-162,174-184,190-195,197-213,217-226,228-232,235-254,256-258,260-262,266-275,277-283
+  s_7a8a47f3f3b2a0::t_0f1f1346ff13c7 214,255,263
+bkms-server/pkg/extension/depservice/model/instance_store_test.go
+  s_7a8a47f3f3b2a0::t_916483a5df79bb 177-178,180-191,207-220
+  s_7a8a47f3f3b2a0::t_5721346324f561 179
+  s_7a8a47f3f3b2a0::t_1b7f68c1823d5b 221
+bkms-server/pkg/extension/depservice/provider/polaris/provider_test.go
+  s_7a8a47f3f3b2a0::t_af299407ede6cd 104,106,108,110,113
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 55,67,81,90,92,128,145
+bkms-server/cmd/worker.go
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 92,119,121-123
+bkms-server/pkg/server/taskqtask/redistask/common.go
+  s_7a8a47f3f3b2a0::t_7c34ced0f33962 41-47,108-110,112-121,123-126
+  s_7a8a47f3f3b2a0::t_53584b838371ee 31
+  h_f84a1c66e9587e 111
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 1-30,32-40,48-107,127
+  s_7a8a47f3f3b2a0::t_418c7483062aa3 122
+bkms-server/pkg/extension/depservice/provider/fake/provider.go
+  s_7a8a47f3f3b2a0::t_427b6f7cd2dd06 34-47,89-95,105-108
+  s_7a8a47f3f3b2a0::t_bb15dc2b1334a0 85,101,104
+  s_7a8a47f3f3b2a0::t_743508231c6928 21,27,33,48-67,70,72-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "ee53d9c45724051f60b367f262bc0567a0911460",
+  "prompts": {},
+  "humans": {
+    "h_f84a1c66e9587e": {
+      "author": "zup779 <zup779@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_7a8a47f3f3b2a0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b4dfacfe-87bc-4669-9c1c-7929c870dd27",
+        "model": "grok-4.5"
+      },
+      "human_author": null
+    }
+  }
+}
