@@ -1,0 +1,36 @@
+bkms-server/pkg/server/taskqtask/redistask/create.go
+  s_7a8a47f3f3b2a0::t_a0fdb219955476 147-152
+bkms-server/pkg/server/taskqtask/redistask/destroy.go
+  s_7a8a47f3f3b2a0::t_3e20c93b66a998 67-70,73-75
+bkms-server/pkg/server/taskqtask/redistask/common.go
+  s_7a8a47f3f3b2a0::t_3f089df278e012 33
+  s_7a8a47f3f3b2a0::t_61b2264b9abedc 117-139
+  s_7a8a47f3f3b2a0::t_a5ed8ba24b1957 47-51
+bkms-server/pkg/extension/depservice/manager.go
+  s_7a8a47f3f3b2a0::t_d0def5645b78c5 132
+  h_f84a1c66e9587e 125
+  s_7a8a47f3f3b2a0::t_5a94c2bd4bb847 185-189
+bkms-server/pkg/server/taskqtask/redistask/disable.go
+  s_7a8a47f3f3b2a0::t_e8a34a03a7110a 66-69,72-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "c8a82e67f36d98f24fd439ec4aa3fc15aefdc5f1",
+  "prompts": {},
+  "humans": {
+    "h_f84a1c66e9587e": {
+      "author": "zup779 <zup779@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_7a8a47f3f3b2a0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b4dfacfe-87bc-4669-9c1c-7929c870dd27",
+        "model": "grok-4.5"
+      },
+      "human_author": "zup779 <zup779@gmail.com>"
+    }
+  }
+}
