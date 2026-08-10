@@ -1,0 +1,46 @@
+bkms-server/pkg/server/taskqtask/depsvcredis/register.go
+  s_7a8a47f3f3b2a0::t_6d26c7bcc8f739 1-78
+bkms-server/pkg/server/taskqtask/task.go
+  s_7a8a47f3f3b2a0::t_6d26c7bcc8f739 46-47,49-51
+  s_2890e20f5b223f::t_128e4b3261db92 35
+bkms-server/pkg/server/taskqtask/depsvcredis/destroy.go
+  s_7a8a47f3f3b2a0::t_6d26c7bcc8f739 19,40-41,114
+bkms-server/pkg/server/taskqtask/depsvcredis/common.go
+  s_7a8a47f3f3b2a0::t_0780ae57931209 19-20
+  s_7a8a47f3f3b2a0::t_6d26c7bcc8f739 1-18,21-156
+bkms-server/pkg/server/taskqtask/depsvcredis/create.go
+  s_7a8a47f3f3b2a0::t_6d26c7bcc8f739 19,40-41
+bkms-server/pkg/extension/depservice/provider/redis/provider.go
+  s_7a8a47f3f3b2a0::t_6d26c7bcc8f739 29,57,81
+bkms-server/pkg/server/taskqtask/depsvcredis/disable.go
+  s_7a8a47f3f3b2a0::t_6d26c7bcc8f739 19,39-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "df965d69e498e38c1c94c03d7c892fa6e240ce70",
+  "prompts": {},
+  "humans": {
+    "h_f84a1c66e9587e": {
+      "author": "zup779 <zup779@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_2890e20f5b223f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a24bd7ff-0f09-44de-aaab-4368e7f64dad",
+        "model": "grok-4.5"
+      },
+      "human_author": "zup779 <zup779@gmail.com>"
+    },
+    "s_7a8a47f3f3b2a0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b4dfacfe-87bc-4669-9c1c-7929c870dd27",
+        "model": "grok-4.5"
+      },
+      "human_author": "zup779 <zup779@gmail.com>"
+    }
+  }
+}
