@@ -1,0 +1,53 @@
+bkms-server/pkg/infras/taskq/taskq_test.go
+  s_7a8a47f3f3b2a0::t_403acfd49cee98 90-100
+bkms-server/pkg/infras/taskq/tasktype.go
+  h_f84a1c66e9587e 51
+  s_7a8a47f3f3b2a0::t_2ab43d1784ff5b 68,73,76-80,83-86
+  s_7a8a47f3f3b2a0::t_f086498ef458c9 53,55,60-61,67,74-75,81-82
+  s_7a8a47f3f3b2a0::t_30ec02899fcea1 27,42
+  s_7a8a47f3f3b2a0::t_04454b8bc7d464 131-138
+  s_7a8a47f3f3b2a0::t_11087a18cecd6e 87
+  s_7a8a47f3f3b2a0::t_a45ee5d64bc382 139
+bkms-server/pkg/server/taskqtask/redistask/register.go
+  s_7a8a47f3f3b2a0::t_54675ee7795d60 46,52,62,72
+  s_7a8a47f3f3b2a0::t_2d424d10b0f521 23,40-45,53-55,63-65,73-75
+  s_7a8a47f3f3b2a0::t_a5941d539c9334 56-57
+  s_7a8a47f3f3b2a0::t_482c89f799ea26 66-67
+  s_7a8a47f3f3b2a0::t_41ce36e8be11be 76-77
+bkms-server/pkg/extension/depservice/provider/redis/provider.go
+  s_7a8a47f3f3b2a0::t_b7c521ff14a590 58-60
+bkms-server/pkg/server/taskqtask/redistask/create.go
+  h_f84a1c66e9587e 42
+  s_7a8a47f3f3b2a0::t_49117c35b59cd4 136,144,155
+  s_7a8a47f3f3b2a0::t_96216e93505223 35-36,43,46-53,55-58,88-97,134-135,137-141,146,149-153,157,160,165,169
+  s_7a8a47f3f3b2a0::t_1230ed961ec998 142-143
+  s_7a8a47f3f3b2a0::t_73c7760aea1b64 145
+  s_7a8a47f3f3b2a0::t_1b4f4fe006dcbe 147-148
+  s_7a8a47f3f3b2a0::t_2574651f635141 154
+  s_7a8a47f3f3b2a0::t_e60c13caf38cd4 166
+  h_f84a1c66e9587e 171,174,176,178,183
+bkms-server/pkg/infras/taskq/server.go
+  h_f84a1c66e9587e 55,57-58,70
+  s_7a8a47f3f3b2a0::t_32df7d22e746cb 87-89,93-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.21",
+  "base_commit_sha": "908ca9a6e23a7a8069fb95fa17eeb0b08e2de3f6",
+  "prompts": {},
+  "humans": {
+    "h_f84a1c66e9587e": {
+      "author": "zup779 <zup779@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_7a8a47f3f3b2a0": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b4dfacfe-87bc-4669-9c1c-7929c870dd27",
+        "model": "grok-4.5"
+      },
+      "human_author": "zup779 <zup779@gmail.com>"
+    }
+  }
+}
