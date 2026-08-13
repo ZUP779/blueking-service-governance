@@ -1,0 +1,45 @@
+bkms-cli/.agents/prompts/app-polaris.md
+  s_4d03ad372e4b83::t_ab2103fd952952 15-17,32,44-46,122,141-143,146-147,155,157,170,199,204,213-215,239,241,245
+  h_f84a1c66e9587e 185
+  s_4d03ad372e4b83::t_a8c7f6de34058e 72,74
+  s_4d03ad372e4b83::t_f61f7fd6c599f4 186
+bkms-cli/cmd/app/polaris/list.go
+  s_4d03ad372e4b83::t_6aba524f394038 28,41-44,63
+bkms-cli/pkg/client/polaris.go
+  s_4d03ad372e4b83::t_8f7e2acb060dd8 24-25,27-28,31,33,35,39,46-47,55-81
+bkms-cli/cmd/app/polaris/update.go
+  s_4d03ad372e4b83::t_a60192beebc02c 101-102
+  s_4d03ad372e4b83::t_65d59bca6d770e 45,50
+  s_4d03ad372e4b83::t_9ac6a176910d98 30,46-47,49,51-52,57-60,63,69-70,72,74,78-80,117
+  s_4d03ad372e4b83::t_8852dbf229928a 110-111
+  s_4d03ad372e4b83::t_d5ec4f01579f5b 118
+bkms-cli/cmd/app/polaris/create.go
+  s_4d03ad372e4b83::t_f165f795a88527 118-119
+  s_4d03ad372e4b83::t_ce403c8d5935bd 109-110
+  s_4d03ad372e4b83::t_9ca6e994a1ab45 30,45-46,51-53,59-60,63-64,67,72
+bkms-cli/cmd/app/polaris/delete.go
+  s_4d03ad372e4b83::t_d8a8fe1e9712e2 27,39-44,46,48,63
+  s_4d03ad372e4b83::t_81eed95f2ec36b 56-57
+  s_4d03ad372e4b83::t_4e03aa84192c3f 64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "be5c8355c0bfc279ccb39f6cd9a48f2023dfa0ce",
+  "prompts": {},
+  "humans": {
+    "h_f84a1c66e9587e": {
+      "author": "zup779 <zup779@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_4d03ad372e4b83": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "2be312e1-6287-418d-8c9d-d91966ff4aac",
+        "model": "grok-4.6"
+      },
+      "human_author": "zup779 <zup779@gmail.com>"
+    }
+  }
+}
