@@ -1,0 +1,24 @@
+bkms-cli/cmd/app/polaris/create.go
+  s_fbdca6546ab450::t_9c7777c89b5c3a 72-73,94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "1f0ee114b91ad1ab67a4ed67e54da05f13068223",
+  "prompts": {},
+  "humans": {
+    "h_f84a1c66e9587e": {
+      "author": "zup779 <zup779@gmail.com>"
+    }
+  },
+  "sessions": {
+    "s_fbdca6546ab450": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "09293f91-070f-4b0f-87a9-49e9595faac5",
+        "model": "grok-4.5"
+      },
+      "human_author": "zup779 <zup779@gmail.com>"
+    }
+  }
+}
