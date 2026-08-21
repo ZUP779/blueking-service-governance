@@ -218,10 +218,7 @@ func (s *PolarisConfigService) reconcileImmediately(
 		ctx, app, config, config.EnvNamesOutsideScope(),
 	)
 	applyErr := s.applyImmediately(ctx, app, config, config.ScopeEnvNames)
-	if releaseErr != nil {
-		return releaseErr
-	}
-	return applyErr
+	return stderrors.Join(releaseErr, applyErr)
 }
 
 // applyImmediately 逐环境同步下发 CR 与 Service，并记录每个环境的结果。
