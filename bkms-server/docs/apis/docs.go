@@ -15042,49 +15042,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/envs/{envID}/polaris-operator": {
-            "get": {
-                "security": [
-                    {
-                        "BkUserInfo": []
-                    },
-                    {
-                        "BkUserCredential": []
-                    }
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "polaris-access-points"
-                ],
-                "summary": "获取环境的北极星组件状态",
-                "operationId": "GetEnvPolarisOperator",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "环境 ID",
-                        "name": "envID",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/serializer.PolarisOperatorResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/bkerrs.GinErrorOutput"
-                        }
-                    }
-                }
-            }
-        },
         "/envs/{envID}/port-pools": {
             "get": {
                 "security": [
@@ -19043,6 +19000,130 @@ const docTemplate = `{
                 }
             }
         },
+        "/workspaces/{workspaceID}/clusters/{clusterID}/cluster-addons": {
+            "get": {
+                "security": [
+                    {
+                        "BkUserInfo": []
+                    },
+                    {
+                        "BkUserCredential": []
+                    }
+                ],
+                "description": "集群必须是空间绑定的 BCS 项目下的非共享集群，可以没有环境。",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "cluster-addon"
+                ],
+                "summary": "查询空间集群上可安装的集群插件列表",
+                "operationId": "ListWorkspaceClusterAddons",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "工作空间 ID",
+                        "name": "workspaceID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "BCS 集群 ID",
+                        "name": "clusterID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "命名空间，默认为插件定义中的 defaultNamespace",
+                        "name": "namespace",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/serializer.ListClusterAddonsOutput"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/bkerrs.GinErrorOutput"
+                        }
+                    }
+                }
+            }
+        },
+        "/workspaces/{workspaceID}/clusters/{clusterID}/cluster-addons/{addonName}": {
+            "post": {
+                "security": [
+                    {
+                        "BkUserInfo": []
+                    },
+                    {
+                        "BkUserCredential": []
+                    }
+                ],
+                "description": "集群必须是空间绑定的 BCS 项目下的非共享集群，可以没有环境。\n与环境维度的接口共用安装锁，同一集群命名空间内的同一插件同时只允许一个安装或卸载操作。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "cluster-addon"
+                ],
+                "summary": "在空间集群上部署/更新集群插件",
+                "operationId": "UpsertWorkspaceClusterAddon",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "工作空间 ID",
+                        "name": "workspaceID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "BCS 集群 ID",
+                        "name": "clusterID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "插件名称",
+                        "name": "addonName",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "请求体",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/serializer.UpsertClusterAddonInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/bkerrs.GinErrorOutput"
+                        }
+                    }
+                }
+            }
+        },
         "/workspaces/{workspaceID}/components": {
             "get": {
                 "security": [
@@ -20369,69 +20450,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/workspaces/{workspaceID}/polaris-access-points/{accessPointID}/operator-installs": {
-            "post": {
-                "security": [
-                    {
-                        "BkUserInfo": []
-                    },
-                    {
-                        "BkUserCredential": []
-                    }
-                ],
-                "description": "集群必须已绑定该接入点；每个集群创建一个异步任务，同一集群同时只允许一个运行中的任务。",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "polaris-access-points"
-                ],
-                "summary": "安装或更新北极星组件",
-                "operationId": "InstallPolarisOperators",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "工作空间 ID",
-                        "name": "workspaceID",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "接入点 ID",
-                        "name": "accessPointID",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "目标集群与 chart 版本",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/serializer.OperatorInstallInput"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/serializer.OperatorTaskListResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/bkerrs.GinErrorOutput"
-                        }
-                    }
-                }
-            }
-        },
         "/workspaces/{workspaceID}/polaris-clusters": {
             "get": {
                 "security": [
@@ -20476,7 +20494,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/workspaces/{workspaceID}/polaris-operators": {
+        "/workspaces/{workspaceID}/polaris-operator-values": {
             "get": {
                 "security": [
                     {
@@ -20486,15 +20504,15 @@ const docTemplate = `{
                         "BkUserCredential": []
                     }
                 ],
-                "description": "返回候选集群的组件状态、与接入点不一致的参数、最近的安装任务，以及可选的 chart 版本。",
+                "description": "只返回由接入点推导出的北极星相关 values（不含 Token），不返回组件安装状态。\n组件状态、可选 chart 版本与 release 当前的 values 通过集群插件列表接口获取；\n安装或更新时把期望 values 合并到当前 values 上，调用集群插件安装接口。",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "polaris-access-points"
                 ],
-                "summary": "获取北极星组件状态视图",
-                "operationId": "ListPolarisOperators",
+                "summary": "获取北极星组件的期望 values",
+                "operationId": "ListPolarisOperatorValues",
                 "parameters": [
                     {
                         "type": "string",
@@ -20502,13 +20520,19 @@ const docTemplate = `{
                         "name": "workspaceID",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "只返回绑定到该接入点的集群",
+                        "name": "accessPointID",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/serializer.PolarisOperatorListResponse"
+                            "$ref": "#/definitions/serializer.PolarisOperatorValuesListResponse"
                         }
                     },
                     "400": {
@@ -21418,23 +21442,6 @@ const docTemplate = `{
                 "FailureNetworkUnreachable",
                 "FailureClientAuthEnabled",
                 "FailureTokenInvalid"
-            ]
-        },
-        "accesspoint.OperatorStatus": {
-            "type": "string",
-            "enum": [
-                "ready",
-                "installing",
-                "failed",
-                "outdated",
-                "not_installed"
-            ],
-            "x-enum-varnames": [
-                "OperatorStatusReady",
-                "OperatorStatusInstalling",
-                "OperatorStatusFailed",
-                "OperatorStatusOutdated",
-                "OperatorStatusNotInstalled"
             ]
         },
         "admin.RoleCode": {
@@ -23293,19 +23300,6 @@ const docTemplate = `{
         },
         "github_com_TencentBlueKing_blueking-service-governance_bkms-server_pkg_workload_networking_serializer.EmptyOutput": {
             "type": "object"
-        },
-        "installtask.Status": {
-            "type": "string",
-            "enum": [
-                "running",
-                "succeeded",
-                "failed"
-            ],
-            "x-enum-varnames": [
-                "StatusRunning",
-                "StatusSucceeded",
-                "StatusFailed"
-            ]
         },
         "runtimemod.PublicModView": {
             "type": "object",
@@ -26162,7 +26156,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "currentValues": {
-                    "description": "当前已安装的 values 参数（JSON 字符串，未安装时为空）",
+                    "description": "当前已安装的 values 参数（YAML 字符串，未安装时为空）",
                     "type": "string"
                 },
                 "message": {
@@ -27736,7 +27730,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "bkCIProjectID": {
-                    "description": "蓝盾项目 ID;\n创建时，新建容器项目，无需填写\n创建时，绑定已有容器项目，必填.",
+                    "description": "蓝盾项目 ID / 绑定容器项目时的 BCS 项目 code。\n创建时，新建容器项目，无需填写。\n创建时，绑定已有容器项目，必填。",
                     "type": "string"
                 },
                 "description": {
@@ -32067,84 +32061,6 @@ const docTemplate = `{
                 }
             }
         },
-        "serializer.OperatorInstallInput": {
-            "type": "object",
-            "required": [
-                "chartVersion",
-                "clusterIDs"
-            ],
-            "properties": {
-                "chartVersion": {
-                    "description": "chart 版本",
-                    "type": "string"
-                },
-                "clusterIDs": {
-                    "description": "目标集群 ID，必须已绑定该接入点",
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "serializer.OperatorTaskListResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/serializer.OperatorTaskOutput"
-                    }
-                }
-            }
-        },
-        "serializer.OperatorTaskOutput": {
-            "type": "object",
-            "properties": {
-                "chartVersion": {
-                    "description": "chart 版本",
-                    "type": "string"
-                },
-                "clusterID": {
-                    "description": "目标集群 ID",
-                    "type": "string"
-                },
-                "finishedAt": {
-                    "description": "结束时间，运行中为 null",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "任务 ID",
-                    "type": "string"
-                },
-                "message": {
-                    "description": "失败原因等补充信息",
-                    "type": "string"
-                },
-                "operator": {
-                    "description": "发起人",
-                    "type": "string"
-                },
-                "startedAt": {
-                    "description": "开始时间",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "任务状态",
-                    "enum": [
-                        "running",
-                        "succeeded",
-                        "failed"
-                    ],
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/installtask.Status"
-                        }
-                    ]
-                }
-            }
-        },
         "serializer.PaginatedAppConfigFileVersionOutputObjs": {
             "type": "object",
             "properties": {
@@ -33084,97 +33000,49 @@ const docTemplate = `{
                 }
             }
         },
-        "serializer.PolarisOperatorListOutput": {
+        "serializer.PolarisOperatorValuesListOutput": {
             "type": "object",
             "properties": {
-                "chartVersions": {
-                    "description": "可选的 chart 版本，从新到旧",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                "addonName": {
+                    "description": "组件对应的集群插件名称，安装与状态查询使用集群插件接口",
+                    "type": "string"
                 },
-                "operators": {
-                    "description": "候选集群的组件状态",
+                "clusters": {
+                    "description": "已绑定接入点的集群",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/serializer.PolarisOperatorOutput"
+                        "$ref": "#/definitions/serializer.PolarisOperatorValuesOutput"
                     }
                 }
             }
         },
-        "serializer.PolarisOperatorListResponse": {
+        "serializer.PolarisOperatorValuesListResponse": {
             "type": "object",
             "properties": {
                 "data": {
-                    "$ref": "#/definitions/serializer.PolarisOperatorListOutput"
+                    "$ref": "#/definitions/serializer.PolarisOperatorValuesListOutput"
                 }
             }
         },
-        "serializer.PolarisOperatorOutput": {
+        "serializer.PolarisOperatorValuesOutput": {
             "type": "object",
             "properties": {
                 "accessPointID": {
-                    "description": "集群绑定的自建接入点 ID，未绑定为空",
+                    "description": "集群绑定的自建接入点 ID",
                     "type": "string"
                 },
-                "chartVersion": {
-                    "description": "已安装的 chart 版本，未安装为空",
+                "accessPointName": {
+                    "description": "集群绑定的自建接入点名称",
                     "type": "string"
                 },
                 "clusterID": {
                     "description": "集群 ID",
                     "type": "string"
                 },
-                "driftFields": {
-                    "description": "与接入点期望值不一致的 values 键，仅 outdated 时非空",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "installed": {
-                    "description": "是否已安装",
-                    "type": "boolean"
-                },
-                "lastTask": {
-                    "description": "最近一次安装任务，没有任务时为 null",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/serializer.OperatorTaskOutput"
-                        }
-                    ]
-                },
-                "namespace": {
-                    "description": "helm release 所在命名空间，未安装为空",
-                    "type": "string"
-                },
-                "releaseName": {
-                    "description": "helm release 名称，未安装为空",
-                    "type": "string"
-                },
-                "status": {
-                    "description": "组件状态",
-                    "enum": [
-                        "ready",
-                        "installing",
-                        "failed",
-                        "outdated",
-                        "not_installed"
-                    ],
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/accesspoint.OperatorStatus"
-                        }
-                    ]
-                }
-            }
-        },
-        "serializer.PolarisOperatorResponse": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "$ref": "#/definitions/serializer.PolarisOperatorOutput"
+                "values": {
+                    "description": "由接入点推导出的期望 values，只含北极星相关的键，不含 Token。\n前端需要把它合并到 release 当前的 values（集群插件列表的 installInfo.currentValues）上再提交，\n直接提交会覆盖 release 上的其他参数",
+                    "type": "object",
+                    "additionalProperties": {}
                 }
             }
         },
