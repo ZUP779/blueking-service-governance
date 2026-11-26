@@ -94,6 +94,18 @@ var _ = Describe("PolarisConfig", func() {
 			}))
 		})
 
+		It("should not return the token on a workspace access point", func() {
+			config := &polaris.PolarisConfig{
+				AccessPointID: "workspace-ap",
+				Properties: polaris.Properties{
+					InstanceKey:  "svc",
+					PolarisToken: "token",
+					ServicePort:  8080,
+				},
+			}
+			Expect(config.GetVars()).To(Equal([]polaris.ConfigVar{{Key: "svc_serviceport", Value: "8080"}}))
+		})
+
 		It("should return no vars for immediate-register configs", func() {
 			config := &polaris.PolarisConfig{
 				Properties: polaris.Properties{

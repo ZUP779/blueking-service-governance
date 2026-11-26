@@ -34,6 +34,7 @@ import (
 	envmodel "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/core/env/model"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/core/render"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/core/resname"
+	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/addon/polaris/accesspoint"
 	k8skind "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/infras/kubernetes/kind"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/workload/appmodelcore/envvarrefs"
 )
@@ -51,12 +52,13 @@ type WorkloadResult struct {
 
 // WorkloadBuilder applies environment-specific Polaris configs to a workload payload.
 type WorkloadBuilder struct {
-	db *mongo.Database
+	db       *mongo.Database
+	resolver accesspoint.Resolver
 }
 
 // NewWorkloadBuilder creates a Polaris workload builder.
 func NewWorkloadBuilder(db *mongo.Database) *WorkloadBuilder {
-	return &WorkloadBuilder{db: db}
+	return &WorkloadBuilder{db: db, resolver: accesspoint.NewResolver(db)}
 }
 
 // Build builds polaris related extra resources.
@@ -79,7 +81,11 @@ func (b *WorkloadBuilder) Build(
 		ExtraObjects: make([]unstructured.Unstructured, 0, len(configs)*2),
 	}
 	for _, cfg := range configs {
-		objects, buildErr := buildExtraResources(app, env, cfg, vars, collector)
+		ap, resolveErr := b.resolver.ResolveByID(ctx, app.WorkspaceID, cfg.EffectiveAccessPointID())
+		if resolveErr != nil {
+			return nil, fmt.Errorf("resolve polaris access point of config %s: %w", cfg.Name, resolveErr)
+		}
+		objects, buildErr := buildExtraResources(app, env, cfg, ap, vars, collector)
 		if buildErr != nil {
 			return nil, fmt.Errorf("build resources for polaris config %s: %w", cfg.Name, buildErr)
 		}
@@ -93,6 +99,7 @@ func (b *WorkloadBuilder) Build(
 // - app: 目标应用
 // - env: 目标环境
 // - cfg: 北极星配置
+// - ap: 配置固定的接入点，决定 CR 的 token 与是否下发 dynamicWeight
 // - vars: 渲染 serviceLabels 时的变量上下文
 // - collector: 收集未定义环境变量引用，可为 nil
 // Returns:
@@ -102,6 +109,7 @@ func buildExtraResources(
 	app *bkmsapp.Application,
 	env *envmodel.Environment,
 	cfg *PolarisConfig,
+	ap *accesspoint.AccessPoint,
 	vars map[string]string,
 	collector *envvarrefs.Collector,
 ) ([]unstructured.Unstructured, error) {
@@ -124,19 +132,22 @@ func buildExtraResources(
 		serviceSpec["extraMeta"] = extraMeta
 	}
 
-	// enable 直接取环境级开关，不叠加 cfg.EnableWeightFactor 二次判断。
-	//
-	// dynamicWeight 始终下发：关闭时写 enable=false，而不是省略整个键。
-	// 省略要靠 SSA 回收字段，但环境级即时 Patch 走 JSON Patch，会把字段所有权
-	// 转出本 FieldManager，之后 SSA 省略时删不掉，CR 上会残留 enable=true。
 	polarisSpec := map[string]any{
 		"name":      cfg.PolarisName,
 		"namespace": cfg.PolarisNamespace,
-		"token":     cfg.PolarisToken,
-		"dynamicWeight": map[string]any{
+		"token":     crToken(cfg, ap),
+	}
+	// enable 直接取环境级开关，不叠加 cfg.EnableWeightFactor 二次判断。
+	//
+	// 支持权重因子的接入点上 dynamicWeight 始终下发：关闭时写 enable=false，而不是省略整个键。
+	// 省略要靠 SSA 回收字段，但环境级即时 Patch 走 JSON Patch，会把字段所有权
+	// 转出本 FieldManager，之后 SSA 省略时删不掉，CR 上会残留 enable=true。
+	// 不支持权重因子的接入点不会被 Patch dynamicWeight，可以省略
+	if ap.Capabilities.WeightFactor {
+		polarisSpec["dynamicWeight"] = map[string]any{
 			"enable":                cfg.EnvDynamicWeights[env.Name],
 			"preserveServiceConfig": true,
-		},
+		}
 	}
 
 	crMap := map[string]any{

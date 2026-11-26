@@ -150,6 +150,16 @@ func (c *PolarisConfig) GetAccessPointID() string {
 	return c.AccessPointID
 }
 
+// EffectiveAccessPointID 返回配置实际使用的接入点 ID：存量配置为空，按平台托管接入点处理
+func (c *PolarisConfig) EffectiveAccessPointID() string {
+	return lo.CoalesceOrEmpty(c.AccessPointID, accesspoint.PlatformID)
+}
+
+// Capabilities 返回配置所用接入点的能力。能力只取决于接入点类型，不需要解析接入点
+func (c *PolarisConfig) Capabilities() accesspoint.Capabilities {
+	return accesspoint.CapabilitiesOf(accesspoint.KindOfID(c.EffectiveAccessPointID()))
+}
+
 // GenerateName 生成配置名称
 func (c *PolarisConfig) GenerateName() string {
 	return "polaris-" + stringx.Random(5)
@@ -193,22 +203,23 @@ type ConfigVar struct {
 }
 
 // GetVars 返回该配置会注入到 Workload 的环境变量：
-// {instanceKey}_polarisToken、{instanceKey}_serviceport。
+// {instanceKey}_polarisToken（仅接入点能力 InjectClientToken 为 true 时）、{instanceKey}_serviceport。
 // immediate 模式不参与 Workload 渲染，返回空列表。
 func (c *PolarisConfig) GetVars() []ConfigVar {
 	if c.IsImmediateRegister() {
 		return []ConfigVar{}
 	}
-	return []ConfigVar{
-		{
+	vars := make([]ConfigVar, 0, 2)
+	if c.Capabilities().InjectClientToken {
+		vars = append(vars, ConfigVar{
 			Key:   c.InstanceKey + "_polarisToken",
 			Value: c.PolarisToken,
-		},
-		{
-			Key:   c.InstanceKey + "_serviceport",
-			Value: strconv.Itoa(int(c.ServicePort)),
-		},
+		})
 	}
+	return append(vars, ConfigVar{
+		Key:   c.InstanceKey + "_serviceport",
+		Value: strconv.Itoa(int(c.ServicePort)),
+	})
 }
 
 // ConfigUpdateData 定义了更新 PolarisConfig 时允许修改的数据

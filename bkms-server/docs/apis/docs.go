@@ -27715,17 +27715,12 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "polarisNamespace": {
-                    "description": "北极星环境（命名空间）",
+                    "description": "北极星环境（命名空间），可选值取决于生效环境所属的接入点",
                     "type": "string",
-                    "enum": [
-                        "Test",
-                        "Production",
-                        "Development",
-                        "Pre-release"
-                    ]
+                    "minLength": 1
                 },
                 "polarisToken": {
-                    "description": "北极星 Token（当 createNewService 为 false 时必填，为 true 时由平台创建后回填）",
+                    "description": "北极星 Token（接入点要求服务 Token 且 createNewService 为 false 时必填，为 true 时由平台创建后回填）",
                     "type": "string"
                 },
                 "registerMode": {
@@ -30573,29 +30568,26 @@ const docTemplate = `{
             "type": "object",
             "required": [
                 "polarisName",
-                "polarisNamespace",
-                "polarisToken"
+                "polarisNamespace"
             ],
             "properties": {
+                "accessPointID": {
+                    "description": "北极星接入点 ID，不传表示平台托管接入点",
+                    "type": "string"
+                },
                 "polarisName": {
                     "description": "北极星实例名称",
                     "type": "string",
                     "minLength": 1
                 },
                 "polarisNamespace": {
-                    "description": "北极星环境（命名空间）",
-                    "type": "string",
-                    "enum": [
-                        "Test",
-                        "Production",
-                        "Development",
-                        "Pre-release"
-                    ]
-                },
-                "polarisToken": {
-                    "description": "北极星 Token",
+                    "description": "北极星环境（命名空间），可选值取决于接入点",
                     "type": "string",
                     "minLength": 1
+                },
+                "polarisToken": {
+                    "description": "北极星服务 Token；接入点要求服务 Token 时必填，否则忽略",
+                    "type": "string"
                 }
             }
         },
@@ -33697,6 +33689,14 @@ const docTemplate = `{
         "serializer.PolarisConfigOutputObj": {
             "type": "object",
             "properties": {
+                "accessPointID": {
+                    "description": "配置使用的北极星接入点 ID，创建时由生效环境推导并固定；存量配置为平台托管接入点 platform",
+                    "type": "string"
+                },
+                "accessPointName": {
+                    "description": "配置使用的北极星接入点名称；接入点解析失败时为空",
+                    "type": "string"
+                },
                 "appID": {
                     "description": "所属应用 ID",
                     "type": "string"
@@ -33901,6 +33901,14 @@ const docTemplate = `{
         "serializer.PolarisNameOutputObj": {
             "type": "object",
             "properties": {
+                "accessPointID": {
+                    "description": "配置使用的北极星接入点 ID",
+                    "type": "string"
+                },
+                "accessPointName": {
+                    "description": "配置使用的北极星接入点名称；接入点解析失败时为空",
+                    "type": "string"
+                },
                 "name": {
                     "description": "配置名称",
                     "type": "string"
@@ -37584,6 +37592,10 @@ const docTemplate = `{
                 "polarisToken"
             ],
             "properties": {
+                "accessPointID": {
+                    "description": "北极星接入点 ID，不传表示平台托管接入点；接入点需支持权重因子",
+                    "type": "string"
+                },
                 "enableWeightFactor": {
                     "description": "是否开启权重因子",
                     "type": "boolean"
@@ -37594,14 +37606,9 @@ const docTemplate = `{
                     "minLength": 1
                 },
                 "polarisNamespace": {
-                    "description": "北极星环境（命名空间）",
+                    "description": "北极星环境（命名空间），可选值取决于接入点",
                     "type": "string",
-                    "enum": [
-                        "Test",
-                        "Production",
-                        "Development",
-                        "Pre-release"
-                    ]
+                    "minLength": 1
                 },
                 "polarisToken": {
                     "description": "北极星 Token",

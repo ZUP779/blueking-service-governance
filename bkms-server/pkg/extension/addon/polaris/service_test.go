@@ -40,6 +40,7 @@ import (
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/core/env"
 	bkmsenv "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/core/env/model"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/addon/polaris"
+	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/addon/polaris/accesspoint"
 	polarisenvvars "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/addon/polaris/envvars"
 	depenvvars "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/depservice/envvars"
 	polarisprovider "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/depservice/provider/polaris"
@@ -109,7 +110,7 @@ var _ = Describe("PolarisConfigService", func() {
 				AppID: app.ID,
 				Name:  "cfg-create",
 				Properties: polaris.Properties{
-					InstanceKey: "k1", PolarisToken: "t1", ServicePort: 8080,
+					InstanceKey: "k1", PolarisNamespace: "Test", PolarisToken: "t1", ServicePort: 8080,
 				},
 				ScopeEnvNames: []string{environment.Name, otherEnvironment.Name, environment.Name},
 			}
@@ -131,7 +132,7 @@ var _ = Describe("PolarisConfigService", func() {
 				AppID: app.ID,
 				Name:  "cfg-empty-scope",
 				Properties: polaris.Properties{
-					InstanceKey: "k1", PolarisToken: "t1", ServicePort: 8080,
+					InstanceKey: "k1", PolarisNamespace: "Test", PolarisToken: "t1", ServicePort: 8080,
 				},
 			}
 			Expect(service.Create(ctx, app, config, false)).To(Succeed())
@@ -147,6 +148,7 @@ var _ = Describe("PolarisConfigService", func() {
 				mockey.Mock((*polaris.PolarisPlatformManager).UpdateImportedService).To(func(
 					*polaris.PolarisPlatformManager,
 					context.Context,
+					*accesspoint.AccessPoint,
 					string, string, string,
 					*polaris.UpdateServiceParams,
 				) error {
@@ -282,8 +284,10 @@ var _ = Describe("PolarisConfigService", func() {
 				mockey.Mock((*polaris.PolarisPlatformManager).GetImportedService).To(func(
 					_ *polaris.PolarisPlatformManager,
 					_ context.Context,
+					ap *accesspoint.AccessPoint,
 					name, namespace, token string,
 				) (*polaris.RemotePolarisService, error) {
+					Expect(ap.ID).To(Equal(accesspoint.PlatformID))
 					Expect(name).To(Equal("imported-service"))
 					Expect(namespace).To(Equal("Test"))
 					Expect(token).To(Equal("imported-token"))
@@ -298,7 +302,7 @@ var _ = Describe("PolarisConfigService", func() {
 					}, nil
 				}).Build()
 
-				info, err := service.GetImportedService(ctx, "imported-service", "Test", "imported-token")
+				info, err := service.GetImportedService(ctx, app, "", "imported-service", "Test", "imported-token")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(info.EnableWeightFactor).To(BeTrue())
 				Expect(info.Name).To(Equal("imported-service"))
@@ -312,9 +316,20 @@ var _ = Describe("PolarisConfigService", func() {
 					nil, errors.New("verify polaris token: polaris api error: invalid token"),
 				).Build()
 
-				_, err := service.GetImportedService(ctx, "imported-service", "Test", "bad-token")
+				_, err := service.GetImportedService(ctx, app, "", "imported-service", "Test", "bad-token")
 				Expect(err).To(MatchError(ContainSubstring("invalid token")))
 			})
+		})
+
+		It("should require the service token on the platform access point", func() {
+			_, err := service.GetImportedService(ctx, app, "", "imported-service", "Test", "")
+			Expect(err).To(MatchError(polaris.ErrServiceTokenRequired))
+			Expect(polaris.IsClientRequestError(err)).To(BeTrue())
+		})
+
+		It("should reject a namespace outside the fixed list on the platform access point", func() {
+			_, err := service.GetImportedService(ctx, app, "", "imported-service", "Unknown", "token")
+			Expect(errors.Is(err, polaris.ErrInvalidNamespace)).To(BeTrue())
 		})
 	})
 
@@ -324,9 +339,11 @@ var _ = Describe("PolarisConfigService", func() {
 				mockey.Mock((*polaris.PolarisPlatformManager).UpdateImportedService).To(func(
 					_ *polaris.PolarisPlatformManager,
 					_ context.Context,
+					ap *accesspoint.AccessPoint,
 					name, namespace, token string,
 					params *polaris.UpdateServiceParams,
 				) error {
+					Expect(ap.ID).To(Equal(accesspoint.PlatformID))
 					Expect(name).To(Equal("shared-service"))
 					Expect(namespace).To(Equal("Test"))
 					Expect(token).To(Equal("imported-token"))
@@ -336,7 +353,7 @@ var _ = Describe("PolarisConfigService", func() {
 				}).Build()
 
 				Expect(service.UpdateImportedPolaris(
-					ctx, "shared-service", "Test", "imported-token", true,
+					ctx, app, "", "shared-service", "Test", "imported-token", true,
 				)).To(Succeed())
 			})
 		})
@@ -347,7 +364,7 @@ var _ = Describe("PolarisConfigService", func() {
 					Return(polarisprovider.ErrUnauthorized).Build()
 
 				err := service.UpdateImportedPolaris(
-					ctx, "imported-service", "Test", "bad-token", true,
+					ctx, app, "", "imported-service", "Test", "bad-token", true,
 				)
 				Expect(err).To(MatchError(polarisprovider.ErrUnauthorized))
 			})
@@ -361,6 +378,7 @@ var _ = Describe("PolarisConfigService", func() {
 				mockey.Mock((*polaris.PolarisPlatformManager).GetService).To(func(
 					_ *polaris.PolarisPlatformManager,
 					_ context.Context,
+					_ *accesspoint.AccessPoint,
 					name, namespace string,
 				) (*polaris.RemotePolarisService, error) {
 					calls++
@@ -379,7 +397,7 @@ var _ = Describe("PolarisConfigService", func() {
 				missing := newTestConfig(app.ID, "cfg-missing", nil, nil)
 				missing.PolarisName = "missing"
 
-				services := service.GetRemoteServices(ctx, []*polaris.PolarisConfig{shared, other, missing})
+				services := service.GetRemoteServices(ctx, app, []*polaris.PolarisConfig{shared, other, missing})
 				Expect(calls).To(Equal(2))
 				Expect(services["cfg-shared-a"].EnableWeightFactor).To(BeTrue())
 				Expect(services["cfg-shared-b"]).To(BeIdenticalTo(services["cfg-shared-a"]))
@@ -441,6 +459,7 @@ var _ = Describe("PolarisConfigService", func() {
 				mockey.Mock((*polaris.PolarisPlatformManager).UpdateImportedService).To(func(
 					_ *polaris.PolarisPlatformManager,
 					_ context.Context,
+					_ *accesspoint.AccessPoint,
 					name, namespace, token string,
 					params *polaris.UpdateServiceParams,
 				) error {
@@ -468,6 +487,7 @@ var _ = Describe("PolarisConfigService", func() {
 				mockey.Mock((*polaris.PolarisPlatformManager).UpdateImportedService).To(func(
 					*polaris.PolarisPlatformManager,
 					context.Context,
+					*accesspoint.AccessPoint,
 					string, string, string,
 					*polaris.UpdateServiceParams,
 				) error {
@@ -577,6 +597,7 @@ var _ = Describe("PolarisConfigService", func() {
 				mockey.Mock((*polaris.PolarisPlatformManager).UpdateImportedService).To(func(
 					*polaris.PolarisPlatformManager,
 					context.Context,
+					*accesspoint.AccessPoint,
 					string, string, string,
 					*polaris.UpdateServiceParams,
 				) error {

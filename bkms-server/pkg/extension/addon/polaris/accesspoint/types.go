@@ -18,6 +18,8 @@
 
 package accesspoint
 
+import "slices"
+
 // Kind 接入点类型
 type Kind string
 
@@ -88,6 +90,15 @@ func CapabilitiesOf(kind Kind) Capabilities {
 	}
 }
 
+// KindOfID 由接入点 ID 判断接入点类型：PlatformID 为平台托管，其余为空间自建。
+// 只需要能力时用它可以免去解析接入点的查库
+func KindOfID(accessPointID string) Kind {
+	if accessPointID == PlatformID {
+		return KindPlatform
+	}
+	return KindWorkspace
+}
+
 // AccessPoint 解析得到的接入点，是各调用链路（OpenAPI、SDK、operator、tRPC 配置）唯一的接入信息来源。
 //
 // Token 为明文，仅供服务端内部使用，不能出现在接口响应、日志与审计记录中
@@ -120,4 +131,19 @@ type AccessPoint struct {
 // IsPlatform 是否为平台托管接入点
 func (a *AccessPoint) IsPlatform() bool {
 	return a.Kind == KindPlatform
+}
+
+// AllowsNamespace 北极星配置能否使用该命名空间：固定列表来源只允许列表中的命名空间；
+// 实时来源不预先读取北极星，命名空间不存在时按北极星服务端的配置处理（默认开启 namespace.autoCreate，会自动创建）
+func (a *AccessPoint) AllowsNamespace(namespace string) bool {
+	if a.Capabilities.NamespaceSource == NamespaceSourceFixed {
+		return slices.Contains(FixedNamespaces, namespace)
+	}
+	return true
+}
+
+// Untrusted 接入地址是否由用户填写：空间自建接入点的地址由空间管理员登记，平台访问时需要防范 SSRF，
+// 见 httpcli.NewUntrustedClient；平台托管接入点的地址来自平台配置
+func (a *AccessPoint) Untrusted() bool {
+	return a.Kind == KindWorkspace
 }

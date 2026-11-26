@@ -22,6 +22,7 @@ import (
 	"context"
 
 	"github.com/TencentBlueKing/gopkg/stringx"
+	"github.com/bytedance/mockey"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
@@ -31,6 +32,7 @@ import (
 	envmodel "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/core/env/model"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/depservice"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/depservice/model"
+	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/depservice/provider"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/depservice/provider/fake"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/depservice/provider/types"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/store"
@@ -201,6 +203,43 @@ var _ = Describe("ServiceManager", func() {
 			Expect(inst.Status).To(Equal(model.AvailableStatus))
 			Expect(inst.Config["key"]).To(Equal("val"))
 			Expect(inst.Credentials["token"]).To(Equal("secret"))
+		})
+
+		It("overrides the plan config for one call without changing the stored plan", func() {
+			Expect(svcStore.Create(ctx, &model.Service{
+				Name:        "fake-override",
+				DisplayName: "fake-override",
+				Plans: []model.ServicePlan{{
+					Name:         planName,
+					ProviderType: model.ProviderTypeSystemAllocated,
+					Config:       map[string]any{"baseUrl": "http://platform", "keep": "yes"},
+				}},
+			})).To(Succeed())
+
+			var gotConfig map[string]any
+			mocker := mockey.Mock(provider.New).To(func(
+				_ string, plan *model.ServicePlan,
+			) (provider.ServiceProvider, error) {
+				gotConfig = plan.Config
+				return fake.NewProvider(), nil
+			}).Build()
+			defer mocker.UnPatch()
+
+			_, err := mgr.CreateServiceInstance(ctx, &depservice.CreateServiceInstanceParams{
+				Name:        "inst-" + stringx.Random(6),
+				ServiceName: "fake-override",
+				PlanName:    planName,
+				ScopeType:   model.ScopeTypeWorkspace,
+				WorkspaceID: "ws-" + stringx.Random(6),
+				Operator:    "tester",
+				Params:      fakeProvisionParams{},
+			}, depservice.WithPlanConfig(map[string]any{"baseUrl": "http://ap", "token": "ap-token"}))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(gotConfig).To(Equal(map[string]any{"baseUrl": "http://ap", "keep": "yes", "token": "ap-token"}))
+
+			svc, getErr := svcStore.Get(ctx, model.ByName("fake-override"))
+			Expect(getErr).NotTo(HaveOccurred())
+			Expect(svc.Plans[0].Config).To(Equal(map[string]any{"baseUrl": "http://platform", "keep": "yes"}))
 		})
 
 		It("keeps provisioning status for an async provider", func() {

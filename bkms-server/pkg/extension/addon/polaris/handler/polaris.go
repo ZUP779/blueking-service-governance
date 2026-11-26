@@ -28,6 +28,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/common/bkerrs"
+	bkmsapp "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/core/app"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/core/app/appcfg"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/addon/polaris"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/addon/polaris/instancestats"
@@ -115,7 +116,8 @@ func (h *Handler) ListAppPolarisConfigs(c *gin.Context) {
 		)
 		return new(serializer.PolarisConfigOutputObj).FromModel(*config, warnings)
 	})
-	h.fillWithRemote(ctx, configs, outputList)
+	h.fillWithRemote(ctx, app, configs, outputList)
+	h.fillAccessPointNames(ctx, app, configs, outputList)
 
 	ginutils.OK(c, serializer.ListAppPolarisConfigsOutput{Data: outputList})
 }
@@ -149,18 +151,10 @@ func (h *Handler) CreateAppPolarisConfig(c *gin.Context) {
 		return
 	}
 
-	polarisToken := lo.FromPtr(jsonInput.PolarisToken)
-	if !jsonInput.CreateNewService && polarisToken == "" {
-		bkerrs.AbortWithErr(c, bkerrs.New(
-			bkerrs.ErrCodeInvalidRequest,
-			"polarisToken is required when importing existing polaris service",
-		))
-		return
-	}
-
 	config := jsonInput.ToConfig(app.ID)
 
-	createErr := h.polarisConfigService().Create(ctx, app, config, jsonInput.CreateNewService)
+	service := h.polarisConfigService()
+	createErr := service.Create(ctx, app, config, jsonInput.CreateNewService)
 	// 集群同步失败时配置已经落库，仍需记录审计并把失败原因返回给调用方
 	if createErr != nil && !errors.Is(createErr, polaris.ErrClusterSyncFailed) {
 		if errors.Is(createErr, polaris.ErrConfigNameExists) {
@@ -198,8 +192,13 @@ func (h *Handler) CreateAppPolarisConfig(c *gin.Context) {
 		return
 	}
 
+	accessPointID := config.EffectiveAccessPointID()
 	ginutils.OK(c, serializer.CreateAppPolarisConfigOutput{
-		Data: serializer.PolarisNameOutputObj{Name: config.Name},
+		Data: serializer.PolarisNameOutputObj{
+			Name:            config.Name,
+			AccessPointID:   accessPointID,
+			AccessPointName: service.AccessPointNames(ctx, app, []*polaris.PolarisConfig{config})[accessPointID],
+		},
 	})
 }
 
@@ -293,9 +292,9 @@ func (h *Handler) PatchAppPolarisConfig(c *gin.Context) {
 		return
 	}
 	output := new(serializer.PatchAppPolarisConfigOutput).FromModel(updatedConfig)
-	h.fillWithRemote(
-		ctx, []*polaris.PolarisConfig{updatedConfig}, []*serializer.PolarisConfigOutputObj{output.Data},
-	)
+	configs, outputs := []*polaris.PolarisConfig{updatedConfig}, []*serializer.PolarisConfigOutputObj{output.Data}
+	h.fillWithRemote(ctx, app, configs, outputs)
+	h.fillAccessPointNames(ctx, app, configs, outputs)
 	ginutils.OK(c, output)
 }
 
@@ -493,13 +492,14 @@ func (h *Handler) GetImportedPolarisService(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	if _, err := perm.ValidateAppByID(ctx, h.registry, uriInput.AppID, perm.TypeEdit); err != nil {
+	app, err := perm.ValidateAppByID(ctx, h.registry, uriInput.AppID, perm.TypeEdit)
+	if err != nil {
 		bkerrs.AbortWithErr(c, err)
 		return
 	}
 
 	info, err := h.polarisConfigService().GetImportedService(
-		ctx, jsonInput.PolarisName, jsonInput.PolarisNamespace, jsonInput.PolarisToken,
+		ctx, app, jsonInput.AccessPointID, jsonInput.PolarisName, jsonInput.PolarisNamespace, jsonInput.PolarisToken,
 	)
 	if err != nil {
 		if polaris.IsClientRequestError(err) {
@@ -547,7 +547,8 @@ func (h *Handler) UpdateImportedPolaris(c *gin.Context) {
 
 	enabled := *jsonInput.EnableWeightFactor
 	if err = h.polarisConfigService().UpdateImportedPolaris(
-		ctx, jsonInput.PolarisName, jsonInput.PolarisNamespace, jsonInput.PolarisToken, enabled,
+		ctx, app, jsonInput.AccessPointID, jsonInput.PolarisName, jsonInput.PolarisNamespace,
+		jsonInput.PolarisToken, enabled,
 	); err != nil {
 		if polaris.IsClientRequestError(err) {
 			bkerrs.AbortWithErr(c, bkerrs.Wrap(err, bkerrs.ErrCodeInvalidRequest, err.Error()))
@@ -638,6 +639,10 @@ func (h *Handler) PutEnvWeight(c *gin.Context) {
 		ctx, app, config, uriInput.EnvName, *jsonInput.Weight, jsonInput.DynamicWeight,
 	)
 	if err != nil {
+		if polaris.IsClientRequestError(err) {
+			bkerrs.AbortWithErr(c, bkerrs.Wrap(err, bkerrs.ErrCodeInvalidRequest, err.Error()))
+			return
+		}
 		bkerrs.AbortWithErr(c, bkerrs.Wrap(err, bkerrs.ErrCodeInternalServerError, "update env weight"))
 		return
 	}
@@ -655,9 +660,9 @@ func (h *Handler) PutEnvWeight(c *gin.Context) {
 	)
 
 	output := new(serializer.PutEnvWeightOutput).FromModel(updatedConfig)
-	h.fillWithRemote(
-		ctx, []*polaris.PolarisConfig{updatedConfig}, []*serializer.PolarisConfigOutputObj{output.Data},
-	)
+	configs, outputs := []*polaris.PolarisConfig{updatedConfig}, []*serializer.PolarisConfigOutputObj{output.Data}
+	h.fillWithRemote(ctx, app, configs, outputs)
+	h.fillAccessPointNames(ctx, app, configs, outputs)
 	ginutils.OK(c, output)
 }
 
@@ -716,10 +721,11 @@ func (h *Handler) GetEnvInstanceStats(c *gin.Context) {
 // fillWithRemote 用北极星线上服务填充以北极星为准的字段，查不到时保持为空。
 func (h *Handler) fillWithRemote(
 	ctx context.Context,
+	app *bkmsapp.Application,
 	configs []*polaris.PolarisConfig,
 	outputs []*serializer.PolarisConfigOutputObj,
 ) {
-	services := h.polarisConfigService().GetRemoteServices(ctx, configs)
+	services := h.polarisConfigService().GetRemoteServices(ctx, app, configs)
 	for _, out := range outputs {
 		if out == nil {
 			continue
@@ -729,5 +735,20 @@ func (h *Handler) fillWithRemote(
 			continue
 		}
 		out.EnableWeightFactor = lo.ToPtr(svc.EnableWeightFactor)
+	}
+}
+
+// fillAccessPointNames 按输出中的接入点 ID 填充接入点名称
+func (h *Handler) fillAccessPointNames(
+	ctx context.Context,
+	app *bkmsapp.Application,
+	configs []*polaris.PolarisConfig,
+	outputs []*serializer.PolarisConfigOutputObj,
+) {
+	names := h.polarisConfigService().AccessPointNames(ctx, app, configs)
+	for _, out := range outputs {
+		if out != nil {
+			out.AccessPointName = names[out.AccessPointID]
+		}
 	}
 }

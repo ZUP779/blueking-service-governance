@@ -40,6 +40,7 @@ import (
 
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/common/bkerrs"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/common/config"
+	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/common/httpcli"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/common/testutil"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/addon/polaris"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/addon/polaris/accesspoint"
@@ -175,7 +176,7 @@ var _ = Describe("Manager", func() {
 		polarisURL, deadURL = srv.URL, dead.URL
 
 		mockey.Mock(accesspoint.OpenAPIBaseURL).To(func(string) string { return polarisURL }).Build()
-		dialCheckMocker = mockey.Mock(accesspoint.CheckDialAddress).Return(nil).Build()
+		dialCheckMocker = mockey.Mock(httpcli.CheckDialAddress).Return(nil).Build()
 	})
 
 	AfterEach(func() {

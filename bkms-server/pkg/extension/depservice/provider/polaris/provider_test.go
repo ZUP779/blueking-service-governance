@@ -20,6 +20,8 @@ package polaris
 
 import (
 	"context"
+	"net/http"
+	"strings"
 
 	"github.com/TencentBlueKing/gopkg/stringx"
 	"github.com/bytedance/mockey"
@@ -562,6 +564,129 @@ var _ = Describe("Test polaris provider", func() {
 			[]string{"old"},
 		)
 		Expect(merged).To(Equal(map[string]string{"keep": "yes", "new": "2"}))
+	})
+
+	Context("with an access point token", func() {
+		var apConfig map[string]any
+		var apProvider *Provider
+
+		BeforeEach(func() {
+			apConfig = (&Config{BaseURL: testURL, Token: "ap-token", Untrusted: true}).ToMap()
+			var err error
+			apProvider, err = NewProvider(apConfig)
+			Expect(err).NotTo(HaveOccurred())
+			gock.InterceptClient(apProvider.httpCli)
+			DeferCleanup(gock.RestoreClient, apProvider.httpCli)
+		})
+
+		createParams := func() *CreateParams {
+			return &CreateParams{
+				PolarisName:      "test-service",
+				PolarisNamespace: "test-namespace",
+				Owners:           "test-user",
+				AccessPointID:    "ap-1",
+			}
+		}
+
+		It("should send the token header and record the access point in the inst config", func() {
+			mockey.PatchConvey("test", GinkgoT(), func() {
+				defer gock.Off()
+
+				gock.New(testURL).
+					Post("/naming/v1/services").
+					MatchHeader(polarisTokenHeader, "ap-token").
+					Reply(200).
+					JSON(map[string]any{"responses": []map[string]any{{"service": map[string]any{"token": "svc-token"}}}})
+
+				result, err := apProvider.CreateInstance(
+					ctx, "test-inst-id", &types.ServicePlanConfig{Config: apConfig}, createParams(),
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(gock.IsDone()).To(BeTrue())
+				Expect(result.InstConfig["accessPointID"]).To(Equal("ap-1"))
+
+				instCfg, err := ParseInstConfig(result.InstConfig)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(instCfg.AccessPointID).To(Equal("ap-1"))
+			})
+		})
+
+		It("should map 401 to ErrUnauthorized", func() {
+			mockey.PatchConvey("test", GinkgoT(), func() {
+				defer gock.Off()
+
+				gock.New(testURL).
+					Post("/naming/v1/services").
+					Reply(401).
+					JSON(map[string]any{"code": 401000, "info": "invalid token"})
+
+				_, err := apProvider.CreateInstance(
+					ctx, "test-inst-id", &types.ServicePlanConfig{Config: apConfig}, createParams(),
+				)
+				Expect(err).To(MatchError(ErrUnauthorized))
+			})
+		})
+
+		It("should not echo a response that is not from polaris", func() {
+			mockey.PatchConvey("test", GinkgoT(), func() {
+				defer gock.Off()
+
+				gock.New(testURL).
+					Post("/naming/v1/services").
+					Reply(500).
+					BodyString("<html>internal secret page</html>")
+
+				_, err := apProvider.CreateInstance(
+					ctx, "test-inst-id", &types.ServicePlanConfig{Config: apConfig}, createParams(),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("not a polaris response"))
+				Expect(err.Error()).NotTo(ContainSubstring("secret"))
+			})
+		})
+
+		It("should echo a truncated polaris error info", func() {
+			mockey.PatchConvey("test", GinkgoT(), func() {
+				defer gock.Off()
+
+				gock.New(testURL).
+					Post("/naming/v1/services").
+					Reply(400).
+					JSON(map[string]any{"code": 400201, "info": strings.Repeat("x", maxUntrustedInfoLen+50)})
+
+				_, err := apProvider.CreateInstance(
+					ctx, "test-inst-id", &types.ServicePlanConfig{Config: apConfig}, createParams(),
+				)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("code 400201"))
+				Expect(err.Error()).To(ContainSubstring(strings.Repeat("x", maxUntrustedInfoLen) + "..."))
+				Expect(err.Error()).NotTo(ContainSubstring(strings.Repeat("x", maxUntrustedInfoLen+1)))
+			})
+		})
+	})
+
+	It("test requests without an access point token do not carry the token header", func() {
+		mockey.PatchConvey("test", GinkgoT(), func() {
+			defer gock.Off()
+
+			gock.New(testURL).
+				Post("/naming/v1/services").
+				AddMatcher(func(req *http.Request, _ *gock.Request) (bool, error) {
+					return req.Header.Get(polarisTokenHeader) == "", nil
+				}).
+				Reply(200).
+				JSON(map[string]any{"responses": []map[string]any{{"service": map[string]any{"token": "svc-token"}}}})
+
+			result, err := p.CreateInstance(
+				ctx,
+				"test-inst-id",
+				&types.ServicePlanConfig{Config: planConfig},
+				&CreateParams{PolarisName: "test-service", PolarisNamespace: "test-namespace", Owners: "test-user"},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(gock.IsDone()).To(BeTrue())
+			Expect(result.InstConfig["accessPointID"]).To(BeEmpty())
+		})
 	})
 
 	It("test update instance invalid params type", func() {

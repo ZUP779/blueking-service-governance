@@ -108,6 +108,10 @@ type PolarisConfigOutputObj struct {
 	PolarisNamespace string `json:"polarisNamespace"`
 	// 北极星 Token（敏感信息，返回时脱敏）
 	PolarisToken string `json:"polarisToken"`
+	// 配置使用的北极星接入点 ID，创建时由生效环境推导并固定；存量配置为平台托管接入点 platform
+	AccessPointID string `json:"accessPointID"`
+	// 配置使用的北极星接入点名称；接入点解析失败时为空
+	AccessPointName string `json:"accessPointName"`
 
 	// 服务端口
 	ServicePort int32 `json:"servicePort"`
@@ -186,6 +190,7 @@ func (o *PolarisConfigOutputObj) FromModel(config polaris.PolarisConfig, warning
 		PolarisName:       config.PolarisName,
 		PolarisNamespace:  config.PolarisNamespace,
 		PolarisToken:      config.PolarisToken,
+		AccessPointID:     config.EffectiveAccessPointID(),
 		ServicePort:       config.ServicePort,
 		Direct:            config.Direct,
 		KeepNotReadyPod:   config.KeepNotReadyPod,
@@ -266,9 +271,9 @@ type CreateAppPolarisConfigInput struct {
 	InstanceKey string `json:"instanceKey" binding:"required,instance_key"`
 	// 北极星实例名称
 	PolarisName string `json:"polarisName" binding:"required,min=1"`
-	// 北极星环境（命名空间）
-	PolarisNamespace string `json:"polarisNamespace" binding:"required,oneof=Test Production Development Pre-release"`
-	// 北极星 Token（当 createNewService 为 false 时必填，为 true 时由平台创建后回填）
+	// 北极星环境（命名空间），可选值取决于生效环境所属的接入点
+	PolarisNamespace string `json:"polarisNamespace" binding:"required,min=1"`
+	// 北极星 Token（接入点要求服务 Token 且 createNewService 为 false 时必填，为 true 时由平台创建后回填）
 	PolarisToken *string `json:"polarisToken"`
 	// 服务端口
 	ServicePort int32 `json:"servicePort" binding:"required,min=1,max=65535"`
@@ -323,6 +328,10 @@ type CreateAppPolarisConfigOutput struct {
 type PolarisNameOutputObj struct {
 	// 配置名称
 	Name string `json:"name"`
+	// 配置使用的北极星接入点 ID
+	AccessPointID string `json:"accessPointID"`
+	// 配置使用的北极星接入点名称；接入点解析失败时为空
+	AccessPointName string `json:"accessPointName"`
 }
 
 // -----------------------------------------------------------------------------
@@ -407,12 +416,14 @@ type ValidateAppPolarisConfigOutput struct {
 
 // GetImportedPolarisServiceInput is the JSON input for fetching an imported polaris service.
 type GetImportedPolarisServiceInput struct {
+	// 北极星接入点 ID，不传表示平台托管接入点
+	AccessPointID string `json:"accessPointID"`
 	// 北极星实例名称
 	PolarisName string `json:"polarisName" binding:"required,min=1"`
-	// 北极星环境（命名空间）
-	PolarisNamespace string `json:"polarisNamespace" binding:"required,oneof=Test Production Development Pre-release"`
-	// 北极星 Token
-	PolarisToken string `json:"polarisToken" binding:"required,min=1"`
+	// 北极星环境（命名空间），可选值取决于接入点
+	PolarisNamespace string `json:"polarisNamespace" binding:"required,min=1"`
+	// 北极星服务 Token；接入点要求服务 Token 时必填，否则忽略
+	PolarisToken string `json:"polarisToken"`
 }
 
 // GetImportedPolarisServiceOutput is the JSON response for an imported polaris service lookup.
@@ -472,10 +483,12 @@ func ImportedPolarisServiceFromModel(svc *polaris.RemotePolarisService) *Importe
 // UpdateImportedPolarisInput is the JSON input for updating an existing polaris service.
 // 目前只支持权重因子开关。
 type UpdateImportedPolarisInput struct {
+	// 北极星接入点 ID，不传表示平台托管接入点；接入点需支持权重因子
+	AccessPointID string `json:"accessPointID"`
 	// 北极星实例名称
 	PolarisName string `json:"polarisName" binding:"required,min=1"`
-	// 北极星环境（命名空间）
-	PolarisNamespace string `json:"polarisNamespace" binding:"required,oneof=Test Production Development Pre-release"`
+	// 北极星环境（命名空间），可选值取决于接入点
+	PolarisNamespace string `json:"polarisNamespace" binding:"required,min=1"`
 	// 北极星 Token
 	PolarisToken string `json:"polarisToken" binding:"required,min=1"`
 	// 是否开启权重因子

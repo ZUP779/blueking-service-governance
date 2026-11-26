@@ -25,6 +25,8 @@
 OpenAPI 只用第一个地址（`http://{clientHosts[0]}:8090`），SDK 使用全部地址（`host:8091`）。
 地址由用户填写、平台主动访问，为避免 SSRF：不允许回环、链路本地（含云元数据地址）与未指定地址，域名解析到这些地址时在建立连接前拒绝；
 不跟随重定向；非北极星的响应不回显响应体。内网私有地址不限制，自建北极星通常就部署在内网。
+这些限制由 `httpcli.NewUntrustedClient` 实现，连通测试、命名空间读取与 depservice 北极星 provider 共用；
+provider 访问自建接入点时还限制响应体大小，错误信息只回显北极星 JSON 中的 `code` 与截断后的 `info`。
 
 两类接入点的差异全部表达为能力字段（`accesspoint.Capabilities`，`CapabilitiesOf(kind)`）。**后端只看能力，不判断接入点类型或版本**。
 能力不通过接口下发：两类接入点不会同时出现（见第 3 节），前端按 `/frontend-features` 区分两种模式即可：
@@ -113,6 +115,28 @@ OpenAPI 只用第一个地址（`http://{clientHosts[0]}:8090`），SDK 使用�
 本包只声明同签名的函数类型 `accesspoint.ConfigUsageLister`，由删除接口的 handler 把 `polaris.ListConfigUsagesByAccessPoint`
 传给删除逻辑：`addon/polaris` 依赖本包，本包不能直接调用它；`accesspoint/handler` 引用 `addon/polaris` 不构成循环。
 相反方向不需要限制：配置固定在接入点上，生效环境为空时换绑原来的集群不会影响配置后续的操作。
+
+### 4.4 北极星配置按接入点路由（05）
+
+- **推导与固定**：创建配置时对生效环境逐个调用 `ResolveByCluster`，所有环境必须得到同一个接入点，
+  否则返回 `ErrAccessPointMismatch`（错误信息带上两个环境名），集群未绑定返回 `ErrClusterNotBound`（带环境名）；
+  生效范围为空时使用平台托管接入点，不可用时返回 `ErrScopeEnvRequired`。结果写入 `PolarisConfig.accessPointID`。
+  修改生效范围时只校验新加入的环境，它们的集群必须绑定到配置固定的接入点。
+- **OpenAPI 路由**：`PolarisPlatformManager` 用 `depservice.WithPlanConfig` 在单次调用内覆盖 `polaris/default` 方案的
+  `baseUrl`，并带上接入点 Token（`X-Polaris-Token`）与 `untrusted` 标记，不修改库中的方案。
+  创建时 provider 把 `accessPointID` 写入依赖服务实例的配置，更新与删除按实例记录解析接入点；
+  导入已有服务的接口带可选的 `accessPointID`，为空表示平台托管接入点。解析失败返回错误，不回退平台托管接入点。
+- **能力落地**：
+  - `serviceTokenRequired=false` 时导入不要求、不校验服务 Token；PolarisConfig CR 的 `token` 每次下发时取接入点的 Token，
+    因此更换接入点 Token 后下次部署或重新绑定即生效；为 true 时沿用配置中的服务 Token。
+  - `injectClientToken=false` 时环境变量不含 `{instanceKey}_polarisToken`。
+  - `weightFactor=false` 时拒绝开启权重因子与动态权重（`ErrWeightFactorUnsupported`），关闭请求直接忽略；
+    CR 不下发 `dynamicWeight`，调整环境权重的 JSON Patch 也只改权重。
+  - 命名空间（`AccessPoint.AllowsNamespace`）：`fixed` 只允许固定列表（`ErrInvalidNamespace`）；
+    `live` 不预先读取北极星，命名空间不存在时按北极星服务端的配置处理：默认开启 `namespace.autoCreate`，
+    创建服务时会自动创建命名空间；查询已有服务时返回服务不存在。
+- **tRPC 框架地址**：暂不实现，`PolarisRegistryPatcher` 不向框架配置注入北极星地址。
+- **输出**：配置的创建、更新、查询输出 `accessPointID`（存量配置为 `platform`）与 `accessPointName`。
 
 ## 5. 数据模型
 

@@ -127,6 +127,31 @@ var _ = Describe("Reader", func() {
 		Expect(list.Vars).To(BeEmpty())
 	})
 
+	It("omits the token variable of a config on a workspace access point", func() {
+		Expect(configStore.Create(ctx, &polaris.PolarisConfig{
+			AppID:         app.ID,
+			Name:          "cfg-workspace",
+			AccessPointID: "workspace-ap",
+			Properties: polaris.Properties{
+				InstanceKey:      "workspacepolaris",
+				PolarisName:      "workspace-service",
+				PolarisNamespace: "custom-ns",
+				PolarisToken:     "workspace-token",
+				ServicePort:      9090,
+			},
+			ScopeEnvNames: []string{environment.Name},
+		})).To(Succeed())
+
+		list, err := reader.ListEnvVarsForApp(ctx, *environment, app)
+		Expect(err).NotTo(HaveOccurred())
+
+		keys := make([]string, 0, len(list.Vars))
+		for _, item := range list.Vars {
+			keys = append(keys, item.Obj.Key)
+		}
+		Expect(keys).To(ConsistOf("mypolaris_polarisToken", "mypolaris_serviceport", "workspacepolaris_serviceport"))
+	})
+
 	Context("with an immediate-register config in the same environment", func() {
 		BeforeEach(func() {
 			immediate := &polaris.PolarisConfig{

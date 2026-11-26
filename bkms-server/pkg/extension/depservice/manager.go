@@ -64,13 +64,14 @@ func New(db *mongo.Database) *ServiceManager {
 func (m *ServiceManager) CreateServiceInstance(
 	ctx context.Context,
 	params *CreateServiceInstanceParams,
+	opts ...ProviderOption,
 ) (bson.ObjectID, error) {
 	if err := validate.Struct(params); err != nil {
 		return bson.NilObjectID, errors.Wrap(err, "validate params")
 	}
 
 	// 先构造 provider，失败时无需写库，避免残留无效记录
-	plan, svcProvider, err := m.getPlanAndProvider(ctx, params.ServiceName, params.PlanName)
+	plan, svcProvider, err := m.getPlanAndProvider(ctx, params.ServiceName, params.PlanName, opts...)
 	if err != nil {
 		return bson.NilObjectID, err
 	}
@@ -136,13 +137,14 @@ func (m *ServiceManager) UpdateServiceInstance(
 	ctx context.Context,
 	instID bson.ObjectID,
 	params types.ProvisionParams,
+	opts ...ProviderOption,
 ) error {
 	inst, err := m.insts.Get(ctx, store.ByID(instID))
 	if err != nil {
 		return errors.Wrap(err, "get service instance")
 	}
 
-	plan, svcProvider, err := m.getPlanAndProvider(ctx, inst.ServiceName, inst.PlanName)
+	plan, svcProvider, err := m.getPlanAndProvider(ctx, inst.ServiceName, inst.PlanName, opts...)
 	if err != nil {
 		return err
 	}
@@ -161,10 +163,12 @@ func (m *ServiceManager) UpdateServiceInstance(
 	return nil
 }
 
-// getPlanAndProvider 按服务名与 plan 名解析 plan 并构造对应 provider。
+// getPlanAndProvider 按服务名与 plan 名解析 plan 并构造对应 provider，
+// opts 中覆盖的方案配置同时作用于返回的 plan 与 provider。
 func (m *ServiceManager) getPlanAndProvider(
 	ctx context.Context,
 	serviceName, planName string,
+	opts ...ProviderOption,
 ) (*model.ServicePlan, provider.ServiceProvider, error) {
 	svc, err := m.services.Get(ctx, model.ByName(serviceName))
 	if err != nil {
@@ -173,6 +177,15 @@ func (m *ServiceManager) getPlanAndProvider(
 	plan, err := svc.GetPlanByName(planName)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "get service plan %s", planName)
+	}
+	var o providerOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	if len(o.planConfig) > 0 {
+		overridden := *plan
+		overridden.Config = lo.Assign(plan.Config, o.planConfig)
+		plan = &overridden
 	}
 	svcProvider, err := provider.New(svc.Name, plan)
 	if err != nil {
@@ -213,7 +226,9 @@ func (m *ServiceManager) ListServiceInstances(
 
 // DeleteServiceInstance 删除服务实例. 用于需要销毁实例的场景.
 // NOTE: 如果实例被绑定引用, 则无法删除
-func (m *ServiceManager) DeleteServiceInstance(ctx context.Context, instID bson.ObjectID) error {
+func (m *ServiceManager) DeleteServiceInstance(
+	ctx context.Context, instID bson.ObjectID, opts ...ProviderOption,
+) error {
 	inst, err := m.insts.Get(ctx, store.ByID(instID))
 	if err != nil {
 		return errors.Wrap(err, "get service instance")
@@ -250,7 +265,7 @@ func (m *ServiceManager) DeleteServiceInstance(ctx context.Context, instID bson.
 		)
 	}
 
-	plan, svcProvider, err := m.getPlanAndProvider(ctx, inst.ServiceName, inst.PlanName)
+	plan, svcProvider, err := m.getPlanAndProvider(ctx, inst.ServiceName, inst.PlanName, opts...)
 	if err != nil {
 		return err
 	}

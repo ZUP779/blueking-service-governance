@@ -40,6 +40,8 @@ type CreateParams struct {
 	Owners           string `mapstructure:"Owners"`
 	// Metadata 创建时写入北极星服务的 metadata；空则不下发该字段。
 	Metadata map[string]string `mapstructure:"metadata"`
+	// AccessPointID 服务所在的北极星接入点，写入实例配置，供后续更新与删除按实例记录解析接入点
+	AccessPointID string `mapstructure:"accessPointID"`
 }
 
 // Validate 使用 validator 校验 CreateParams 中所有必填字段是否已设置
@@ -70,6 +72,8 @@ type InstConfig struct {
 	PolarisName      string `mapstructure:"polarisName" validate:"required"`
 	PolarisNamespace string `mapstructure:"polarisNamespace" validate:"required"`
 	Token            string `mapstructure:"token" validate:"required"`
+	// AccessPointID 服务所在的北极星接入点，创建时写入；存量实例为空，表示平台托管接入点
+	AccessPointID string `mapstructure:"accessPointID"`
 }
 
 // Validate 使用 validator 校验 InstConfig 中所有必填字段是否已设置

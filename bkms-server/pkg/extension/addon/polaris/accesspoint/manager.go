@@ -32,6 +32,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/common/httpcli"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/infras/account/auth"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/store"
 )
@@ -370,8 +371,8 @@ func normalizeClientHosts(raw []string) ([]string, error) {
 		if ip == nil && hostValidator.Var(host, "hostname_rfc1123") != nil {
 			return nil, errors.Wrapf(ErrAccessPointInvalid, "client host %q must be an IP or a domain name", host)
 		}
-		if ip != nil && isForbiddenIP(ip) {
-			return nil, errors.Wrapf(ErrAccessPointInvalid, "client host %q: %s", host, errForbiddenAddress)
+		if ip != nil && httpcli.IsForbiddenIP(ip) {
+			return nil, errors.Wrapf(ErrAccessPointInvalid, "client host %q: %s", host, httpcli.ErrForbiddenAddress)
 		}
 	}
 	return hosts, nil

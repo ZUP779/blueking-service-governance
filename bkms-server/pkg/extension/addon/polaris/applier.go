@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,6 +34,7 @@ import (
 	bkmsapp "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/core/app"
 	bkmsenv "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/core/env/model"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/deploy/ownership"
+	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/addon/polaris/accesspoint"
 	k8sclient "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/infras/kubernetes/client"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/infras/kubernetes/cluster"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/infras/kubernetes/discovery"
@@ -45,12 +47,13 @@ import (
 // immediate 模式下还负责下发配套的 Service，以及配置离域或删除时清理集群资源，
 // 因为这类配置不依赖部署流程，无法借助部署时的资源差异清理。
 type CRApplier struct {
-	db *mongo.Database
+	db       *mongo.Database
+	resolver accesspoint.Resolver
 }
 
 // NewCRApplier 创建 PolarisConfig CR 下发器。
 func NewCRApplier(db *mongo.Database) *CRApplier {
-	return &CRApplier{db: db}
+	return &CRApplier{db: db, resolver: accesspoint.NewResolver(db)}
 }
 
 // Apply 向指定环境下发 Polaris 资源。
@@ -63,7 +66,11 @@ func (a *CRApplier) Apply(
 	config *PolarisConfig,
 	envVars map[string]string,
 ) error {
-	resources, err := buildExtraResources(app, env, config, envVars, nil)
+	ap, err := a.resolver.ResolveForPolarisConfig(ctx, config)
+	if err != nil {
+		return errors.Wrapf(err, "resolve polaris access point of config %s", config.Name)
+	}
+	resources, err := buildExtraResources(app, env, config, ap, envVars, nil)
 	if err != nil {
 		return errors.Wrap(err, "build polaris resources")
 	}
@@ -146,22 +153,26 @@ type jsonPatchOperation struct {
 	Value any    `json:"value"`
 }
 
-// buildWeightPatch 构建环境权重与动态权重开关的 JSON Patch。
+// buildWeightPatch 构建环境权重与动态权重开关的 JSON Patch；dynamicWeight 为 nil 时只改权重。
 //
 // 整个 dynamicWeight 对象一次替换，而不是 patch 其 enable 子路径：
 // 存量 CR 可能没有 dynamicWeight 父节点，子路径 add 会失败。
-func buildWeightPatch(serviceName string, weight int32, dynamicWeight bool) ([]byte, error) {
-	return json.Marshal([]jsonPatchOperation{
+func buildWeightPatch(serviceName string, weight int32, dynamicWeight *bool) ([]byte, error) {
+	ops := []jsonPatchOperation{
 		{Op: "test", Path: "/spec/services/0/name", Value: serviceName},
 		{Op: "add", Path: "/spec/services/0/weight", Value: int64(weight)},
-		{Op: "add", Path: "/spec/polaris/dynamicWeight", Value: map[string]any{
-			"enable":                dynamicWeight,
+	}
+	if dynamicWeight != nil {
+		ops = append(ops, jsonPatchOperation{Op: "add", Path: "/spec/polaris/dynamicWeight", Value: map[string]any{
+			"enable":                *dynamicWeight,
 			"preserveServiceConfig": true,
-		}},
-	})
+		}})
+	}
+	return json.Marshal(ops)
 }
 
-// PatchWeight 仅更新现有 PolarisConfig CR 的服务权重与动态权重开关，不修改其他配置字段。
+// PatchWeight 仅更新现有 PolarisConfig CR 的服务权重与动态权重开关，不修改其他配置字段；
+// 接入点不支持权重因子时 CR 中没有 dynamicWeight，只更新权重
 func (a *CRApplier) PatchWeight(
 	ctx context.Context,
 	app *bkmsapp.Application,
@@ -171,7 +182,9 @@ func (a *CRApplier) PatchWeight(
 	dynamicWeight bool,
 ) error {
 	crName, serviceName := PolarisResourceNames(env, app.Name, config.Name)
-	patch, err := buildWeightPatch(serviceName, weight, dynamicWeight)
+	patch, err := buildWeightPatch(
+		serviceName, weight, lo.Ternary(config.Capabilities().WeightFactor, &dynamicWeight, nil),
+	)
 	if err != nil {
 		return errors.Wrap(err, "build polaris CR weight patch")
 	}

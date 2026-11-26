@@ -51,7 +51,7 @@ func NewReader(db *mongo.Database) *Reader {
 // ListEnvVarsForApp 返回 attach 到给定 app 且对该 environment 生效的全部 polaris 配置所产出的环境变量。
 //
 // 过滤规则由 store 层执行 (ListByEnv 内部基于 IsAvailableInEnv 过滤)。
-// 每条配置产出两个变量：{instanceKey}_polarisToken (敏感) 与 {instanceKey}_serviceport。
+// 每条配置产出的变量见 buildConfigEnvVars。
 func (r *Reader) ListEnvVarsForApp(
 	ctx context.Context,
 	environment envmodel.Environment,
@@ -115,21 +115,22 @@ func (r *Reader) collect(configs []*polaris.PolarisConfig) envvartypes.EnvVariab
 }
 
 // buildConfigEnvVars 为单个 PolarisConfig 产出环境变量列表：
-//   - {instanceKey}_polarisToken (敏感)
+//   - {instanceKey}_polarisToken (敏感)，仅接入点需要客户端 Token 时注入，空间自建接入点的 Token 不能进入 Pod
 //   - {instanceKey}_serviceport
 //
 // 与 PolarisConfig.GetVars 保持一致的 key/value 形态。
 func buildConfigEnvVars(cfg *polaris.PolarisConfig) envvartypes.EnvVariableList {
-	return envvartypes.EnvVariableList{
-		{
+	vars := make(envvartypes.EnvVariableList, 0, 2)
+	if cfg.Capabilities().InjectClientToken {
+		vars = append(vars, envvartypes.EnvVariableObj{
 			Key:         cfg.InstanceKey + "_polarisToken",
 			Value:       cfg.PolarisToken,
 			IsSensitive: true,
-		},
-		{
-			// TODO: 此处大小写符合项目对于环境变量的规范
-			Key:   cfg.InstanceKey + "_serviceport",
-			Value: strconv.Itoa(int(cfg.ServicePort)),
-		},
+		})
 	}
+	return append(vars, envvartypes.EnvVariableObj{
+		// TODO: 此处大小写符合项目对于环境变量的规范
+		Key:   cfg.InstanceKey + "_serviceport",
+		Value: strconv.Itoa(int(cfg.ServicePort)),
+	})
 }

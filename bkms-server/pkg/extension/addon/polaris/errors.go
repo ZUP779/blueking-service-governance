@@ -21,6 +21,7 @@ package polaris
 import (
 	"github.com/pkg/errors"
 
+	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/addon/polaris/accesspoint"
 	polarisprovider "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/depservice/provider/polaris"
 )
 
@@ -35,13 +36,30 @@ var (
 	ErrNotManaged = errors.New("field can only be set for platform-created polaris services")
 	// ErrInvalidResourceName 生成的集群资源名不符合 K8s 命名规则（如超长）
 	ErrInvalidResourceName = errors.New("invalid polaris resource name")
+	// ErrAccessPointMismatch 生效环境的集群绑定了不同的北极星接入点，或与配置固定的接入点不一致
+	ErrAccessPointMismatch = errors.New("scope envs must use the same polaris access point")
+	// ErrScopeEnvRequired 平台托管接入点不可用时，必须选择生效环境才能确定配置使用的接入点
+	ErrScopeEnvRequired = errors.New("scope envs are required to determine the polaris access point")
+	// ErrInvalidNamespace 北极星命名空间不在接入点可选的范围内
+	ErrInvalidNamespace = errors.New("invalid polaris namespace")
+	// ErrServiceTokenRequired 接入点要求引入已有北极星服务时提供服务 Token
+	ErrServiceTokenRequired = errors.New("polarisToken is required when importing existing polaris service")
+	// ErrWeightFactorUnsupported 接入点不支持权重因子与动态权重
+	ErrWeightFactorUnsupported = errors.New("polaris access point does not support weight factor or dynamic weight")
 )
 
-// IsClientRequestError 调用方输入问题（Token、权限、服务不存在、不允许改的字段），handler 映射为 400。
+// IsClientRequestError 调用方输入问题（Token、权限、服务不存在、不允许改的字段、接入点不匹配等），handler 映射为 400。
 func IsClientRequestError(err error) bool {
 	return errors.Is(err, polarisprovider.ErrUnauthorized) ||
 		errors.Is(err, polarisprovider.ErrServiceNotFound) ||
 		errors.Is(err, ErrOperatorEmpty) ||
 		errors.Is(err, ErrNotManaged) ||
-		errors.Is(err, ErrInvalidResourceName)
+		errors.Is(err, ErrInvalidResourceName) ||
+		errors.Is(err, ErrAccessPointMismatch) ||
+		errors.Is(err, ErrScopeEnvRequired) ||
+		errors.Is(err, ErrInvalidNamespace) ||
+		errors.Is(err, ErrServiceTokenRequired) ||
+		errors.Is(err, ErrWeightFactorUnsupported) ||
+		errors.Is(err, accesspoint.ErrClusterNotBound) ||
+		errors.Is(err, accesspoint.ErrAccessPointNotFound)
 }

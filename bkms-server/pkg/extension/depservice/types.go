@@ -53,6 +53,21 @@ type CreateServiceInstanceParams struct {
 	Params types.ProvisionParams `validate:"required"`
 }
 
+// ProviderOption 调整单次调用所用的 provider
+type ProviderOption func(*providerOptions)
+
+type providerOptions struct {
+	planConfig map[string]any
+}
+
+// WithPlanConfig 用 cfg 覆盖方案配置中的同名键，只作用于本次调用构造的 provider，不落库。
+// 用于同一方案需要按调用方的上下文访问不同后端的场景，例如北极星按接入点覆盖 OpenAPI 地址与鉴权 Token
+func WithPlanConfig(cfg map[string]any) ProviderOption {
+	return func(o *providerOptions) {
+		o.planConfig = cfg
+	}
+}
+
 // ListServiceInstancesParams 列表查询参数
 type ListServiceInstancesParams struct {
 	WorkspaceID string

@@ -50,9 +50,33 @@ type Provider struct {
 	config  *Config
 }
 
+const (
+	polarisTokenHeader = "X-Polaris-Token"
+	// maxUntrustedResponseBytes 访问用户填写的地址时响应体的读取上限
+	maxUntrustedResponseBytes = 4 << 20
+	// maxUntrustedInfoLen 访问用户填写的地址时错误信息中回显的北极星 info 的最大长度（按字符计）
+	maxUntrustedInfoLen = 200
+)
+
 // Config represents the Polaris provider configuration
+//
+// 方案配置只有 baseUrl；Token 与 Untrusted 由调用方按北极星接入点覆盖（见 depservice.WithPlanConfig）
 type Config struct {
 	BaseURL string `mapstructure:"baseUrl"`
+	// Token 北极星 OpenAPI 鉴权 Token，非空时随请求携带 X-Polaris-Token 请求头
+	Token string `mapstructure:"token"`
+	// Untrusted 地址由用户填写（如空间自建接入点）：使用 httpcli.NewUntrustedClient 访问，
+	// 限制响应体大小，错误信息不回显非北极星的响应
+	Untrusted bool `mapstructure:"untrusted"`
+}
+
+// ToMap 转换为方案配置的形式，供 depservice.WithPlanConfig 覆盖方案配置
+func (c *Config) ToMap() map[string]any {
+	return map[string]any{
+		"baseUrl":   c.BaseURL,
+		"token":     c.Token,
+		"untrusted": c.Untrusted,
+	}
 }
 
 // RemoteService 北极星 GET /naming/v1/services 返回的服务对象。
@@ -93,13 +117,12 @@ func NewProvider(planConfig map[string]any) (*Provider, error) {
 		return nil, err
 	}
 
-	return &Provider{
-		httpCli: &http.Client{
-			Timeout:   30 * time.Second,
-			Transport: httpcli.NewTransport(),
-		},
-		config: cfg,
-	}, nil
+	httpCli := &http.Client{Transport: httpcli.NewTransport()}
+	if cfg.Untrusted {
+		httpCli = httpcli.NewUntrustedClient()
+	}
+	httpCli.Timeout = 30 * time.Second
+	return &Provider{httpCli: httpCli, config: cfg}, nil
 }
 
 // CreateInstance creates a Polaris service instance
@@ -133,6 +156,7 @@ func (p *Provider) CreateInstance(
 		PolarisName:      createParams.PolarisName,
 		PolarisNamespace: createParams.PolarisNamespace,
 		Token:            token,
+		AccessPointID:    createParams.AccessPointID,
 	})
 	if err != nil {
 		return nil, errors.Wrap(err, "marshal inst config")
@@ -357,6 +381,9 @@ func (p *Provider) doRequest(ctx context.Context, method, path string, body any)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	if p.config.Token != "" {
+		req.Header.Set(polarisTokenHeader, p.config.Token)
+	}
 
 	resp, err := p.httpCli.Do(req)
 	if err != nil {
@@ -364,21 +391,39 @@ func (p *Provider) doRequest(ctx context.Context, method, path string, body any)
 	}
 	defer resp.Body.Close() // nolint
 
-	respBody, err := io.ReadAll(resp.Body)
+	var bodyReader io.Reader = resp.Body
+	if p.config.Untrusted {
+		bodyReader = io.LimitReader(resp.Body, maxUntrustedResponseBytes)
+	}
+	respBody, err := io.ReadAll(bodyReader)
 	if err != nil {
 		return nil, errors.Wrap(err, "read response body")
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return nil, errors.Wrap(ErrUnauthorized, polarisAPIErrorText(resp.StatusCode, respBody))
+		return nil, errors.Wrap(ErrUnauthorized, p.apiErrorText(resp.StatusCode, respBody))
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New(polarisAPIErrorText(resp.StatusCode, respBody))
+		return nil, errors.New(p.apiErrorText(resp.StatusCode, respBody))
 	}
 	return respBody, nil
 }
 
-func polarisAPIErrorText(status int, body []byte) string {
+// apiErrorText 北极星请求失败时的错误信息。
+//
+// 地址由用户填写时可能指向内网的其他服务，不是北极星的响应时不回显响应体，避免通过错误信息读取内网内容
+func (p *Provider) apiErrorText(status int, body []byte) string {
+	if p.config.Untrusted {
+		code := gjson.GetBytes(body, "code")
+		if !gjson.ValidBytes(body) || code.Type != gjson.Number {
+			return fmt.Sprintf("polaris api error: status %d, not a polaris response", status)
+		}
+		info := []rune(gjson.GetBytes(body, "info").String())
+		if len(info) > maxUntrustedInfoLen {
+			info = append(info[:maxUntrustedInfoLen], []rune("...")...)
+		}
+		return fmt.Sprintf("polaris api error: status %d, code %d, info %s", status, code.Int(), string(info))
+	}
 	if info := gjson.GetBytes(body, "info"); info.Exists() && info.String() != "" {
 		return "polaris api error: " + info.String()
 	}

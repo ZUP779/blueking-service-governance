@@ -27,10 +27,12 @@ import (
 
 	"github.com/TencentBlueKing/gopkg/stringx"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
 	log "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/common/logging"
+	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/addon/polaris/accesspoint"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/depservice"
 	depsvcmodel "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/depservice/model"
 	depprovider "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/depservice/provider"
@@ -50,6 +52,8 @@ const (
 
 // CreatePolarisServiceParams 创建北极星服务的参数
 type CreatePolarisServiceParams struct {
+	// AccessPoint 服务所在的北极星接入点
+	AccessPoint        *accesspoint.AccessPoint
 	PolarisName        string
 	PolarisNamespace   string
 	Operator           string // 北极星负责人/操作人
@@ -72,14 +76,18 @@ type UpdateServiceParams struct {
 	EnableWeightFactor *bool
 }
 
-// PolarisPlatformManager 北极星平台服务管理器，封装创建和删除能力
+// PolarisPlatformManager 北极星平台服务管理器，封装创建和删除能力。
+//
+// 北极星 OpenAPI 请求都发往服务所在的接入点：创建与导入由调用方传入接入点，
+// 平台创建服务的更新与删除按依赖服务实例上记录的接入点解析，不按环境当前的集群绑定解析
 type PolarisPlatformManager struct {
-	db *mongo.Database
+	db       *mongo.Database
+	resolver accesspoint.Resolver
 }
 
 // NewPolarisPlatformManager 创建北极星平台管理器。
 func NewPolarisPlatformManager(db *mongo.Database) *PolarisPlatformManager {
-	return &PolarisPlatformManager{db: db}
+	return &PolarisPlatformManager{db: db, resolver: accesspoint.NewResolver(db)}
 }
 
 // CreateService 由平台创建北极星服务
@@ -114,8 +122,9 @@ func (m *PolarisPlatformManager) CreateService(
 			PolarisNamespace: params.PolarisNamespace,
 			Owners:           params.Operator,
 			Metadata:         metadata,
+			AccessPointID:    params.AccessPoint.ID,
 		},
-	})
+	}, depservice.WithPlanConfig(planConfigOf(params.AccessPoint)))
 	if err != nil {
 		return nil, errors.Wrap(err, "create polaris service instance")
 	}
@@ -158,7 +167,13 @@ func (m *PolarisPlatformManager) DeleteService(
 	// 按需创建 ServiceManager
 	svcMgr := depservice.New(m.db)
 
-	if err := svcMgr.DeleteServiceInstance(ctx, params.ServiceInstanceID); err != nil {
+	ap, err := m.resolveInstanceAccessPoint(ctx, svcMgr, params.ServiceInstanceID)
+	if err != nil {
+		return err
+	}
+	if err = svcMgr.DeleteServiceInstance(
+		ctx, params.ServiceInstanceID, depservice.WithPlanConfig(planConfigOf(ap)),
+	); err != nil {
 		return errors.Wrap(err, "delete polaris service instance")
 	}
 
@@ -172,21 +187,28 @@ func (m *PolarisPlatformManager) UpdateService(
 	params *UpdateServiceParams,
 ) error {
 	svcMgr := depservice.New(m.db)
-	if err := svcMgr.UpdateServiceInstance(ctx, config.DepSvcInstID, toPolarisUpdateParams(params)); err != nil {
+	ap, err := m.resolveInstanceAccessPoint(ctx, svcMgr, config.DepSvcInstID)
+	if err != nil {
+		return err
+	}
+	if err = svcMgr.UpdateServiceInstance(
+		ctx, config.DepSvcInstID, toPolarisUpdateParams(params), depservice.WithPlanConfig(planConfigOf(ap)),
+	); err != nil {
 		return errors.Wrap(err, "update polaris service")
 	}
 	return nil
 }
 
-// GetService 只读查询北极星线上服务信息，不校验 Token。
+// GetService 只读查询接入点上的北极星线上服务信息，不校验 Token。
 func (m *PolarisPlatformManager) GetService(
 	ctx context.Context,
+	ap *accesspoint.AccessPoint,
 	name, namespace string,
 ) (*RemotePolarisService, error) {
 	ctx, cancel := context.WithTimeout(ctx, importedServiceCheckTimeout)
 	defer cancel()
 
-	p, err := m.importedProvider(ctx)
+	p, err := m.importedProvider(ctx, ap)
 	if err != nil {
 		return nil, err
 	}
@@ -197,32 +219,40 @@ func (m *PolarisPlatformManager) GetService(
 	return toRemotePolarisService(svc), nil
 }
 
-// GetImportedService 查询导入北极星服务：服务存在且 Token 可写，并返回线上服务信息。
+// GetImportedService 查询接入点上要导入的北极星服务并返回线上服务信息。
+// 接入点要求服务 Token 时同时校验 Token 可写；不要求时只检查服务存在，平台用接入点 Token 访问
 func (m *PolarisPlatformManager) GetImportedService(
 	ctx context.Context,
+	ap *accesspoint.AccessPoint,
 	name, namespace, token string,
 ) (*RemotePolarisService, error) {
 	ctx, cancel := context.WithTimeout(ctx, importedServiceCheckTimeout)
 	defer cancel()
 
-	p, err := m.importedProvider(ctx)
+	p, err := m.importedProvider(ctx, ap)
 	if err != nil {
 		return nil, err
 	}
-	svc, err := p.GetAndValidateService(ctx, name, namespace, token)
+	var svc *polarisprovider.RemoteService
+	if ap.Capabilities.ServiceTokenRequired {
+		svc, err = p.GetAndValidateService(ctx, name, namespace, token)
+	} else {
+		svc, err = p.GetService(ctx, name, namespace)
+	}
 	if err != nil {
 		return nil, errors.Wrap(err, "get imported polaris service")
 	}
 	return toRemotePolarisService(svc), nil
 }
 
-// UpdateImportedService 用用户 Token 把权重因子等字段写回已有北极星服务。
+// UpdateImportedService 用用户 Token 把权重因子等字段写回接入点上已有的北极星服务。
 func (m *PolarisPlatformManager) UpdateImportedService(
 	ctx context.Context,
+	ap *accesspoint.AccessPoint,
 	name, namespace, token string,
 	params *UpdateServiceParams,
 ) error {
-	p, err := m.importedProvider(ctx)
+	p, err := m.importedProvider(ctx, ap)
 	if err != nil {
 		return err
 	}
@@ -323,7 +353,10 @@ func (m *PolarisPlatformManager) extractToken(inst *depsvcmodel.ServiceInstance)
 	return ""
 }
 
-func (m *PolarisPlatformManager) importedProvider(ctx context.Context) (*polarisprovider.Provider, error) {
+// importedProvider 构造访问接入点 OpenAPI 的 provider，方案配置按接入点覆盖，见 planConfigOf
+func (m *PolarisPlatformManager) importedProvider(
+	ctx context.Context, ap *accesspoint.AccessPoint,
+) (*polarisprovider.Provider, error) {
 	svc, err := store.Of(m.db, depsvcmodel.ServiceMeta).Get(ctx, depsvcmodel.ByName(depprovider.ServiceNamePolaris))
 	if err != nil {
 		return nil, errors.Wrap(err, "get polaris dependency service")
@@ -332,11 +365,38 @@ func (m *PolarisPlatformManager) importedProvider(ctx context.Context) (*polaris
 	if err != nil {
 		return nil, errors.Wrap(err, "get polaris dependency service plan")
 	}
-	p, err := polarisprovider.NewProvider(plan.Config)
+	p, err := polarisprovider.NewProvider(lo.Assign(plan.Config, planConfigOf(ap)))
 	if err != nil {
-		return nil, errors.Wrap(err, "create polaris provider")
+		return nil, errors.Wrapf(err, "create polaris provider for access point %s", ap.ID)
 	}
 	return p, nil
+}
+
+// resolveInstanceAccessPoint 按依赖服务实例上记录的接入点解析，存量实例没有记录，按平台托管接入点处理
+func (m *PolarisPlatformManager) resolveInstanceAccessPoint(
+	ctx context.Context, svcMgr *depservice.ServiceManager, instID bson.ObjectID,
+) (*accesspoint.AccessPoint, error) {
+	inst, err := svcMgr.GetServiceInstance(ctx, instID)
+	if err != nil {
+		return nil, errors.Wrapf(err, "get polaris service instance %s", instID.Hex())
+	}
+	instCfg, err := polarisprovider.ParseInstConfig(inst.Config)
+	if err != nil {
+		return nil, errors.Wrapf(err, "parse config of polaris service instance %s", instID.Hex())
+	}
+	accessPointID := lo.CoalesceOrEmpty(instCfg.AccessPointID, accesspoint.PlatformID)
+	ap, err := m.resolver.ResolveByID(ctx, inst.WorkspaceID, accessPointID)
+	if err != nil {
+		return nil, errors.Wrapf(err, "resolve polaris access point of service instance %s", instID.Hex())
+	}
+	return ap, nil
+}
+
+// planConfigOf 按接入点覆盖 depservice 北极星方案的配置：OpenAPI 地址、鉴权 Token 与地址是否可信。
+// 平台托管接入点的 OpenAPI 地址就取自该方案、没有 Token，覆盖后与原方案配置一致
+func planConfigOf(ap *accesspoint.AccessPoint) map[string]any {
+	cfg := &polarisprovider.Config{BaseURL: ap.OpenAPIBaseURL, Token: ap.Token, Untrusted: ap.Untrusted()}
+	return cfg.ToMap()
 }
 
 func toRemotePolarisService(svc *polarisprovider.RemoteService) *RemotePolarisService {

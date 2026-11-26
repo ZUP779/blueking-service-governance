@@ -33,6 +33,7 @@ import (
 	bkmsapp "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/core/app"
 	bkmsenv "github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/core/env/model"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/core/resname"
+	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/extension/addon/polaris/accesspoint"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/store"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/workload/appmodelcore/appmodel"
 	"github.com/TencentBlueKing/blueking-service-governance/bkms-server/pkg/workload/appmodelcore/appspec"
@@ -49,11 +50,15 @@ var ErrClusterSyncFailed = errors.New("polaris cluster resources sync failed")
 
 // PolarisConfigService 负责配置管理和北极星平台服务生命周期。
 // on_deploy 的动态下发通过 asynq 按环境入队；immediate 配置在请求内同步下发 CR 与 Service。
+//
+// 配置创建时由生效环境的集群绑定推导出接入点并固定，之后只允许加入集群绑定到同一接入点的环境；
+// 权重因子、命名空间、服务 Token 等差异按接入点能力处理，见 accesspoint.Capabilities
 type PolarisConfigService struct {
 	db                  *mongo.Database
 	platformManager     *PolarisPlatformManager
 	envStateManager     *PolarisEnvStateManager
 	applier             *CRApplier
+	resolver            accesspoint.Resolver
 	envStore            *bkmsenv.EnvironmentStore
 	envVarsReader       dynamicApplyEnvVarsReader
 	enqueueDynamicApply DynamicApplyEnqueuer
@@ -72,13 +77,17 @@ func NewPolarisConfigService(
 		platformManager:     platformManager,
 		envStateManager:     envStateManager,
 		applier:             NewCRApplier(db),
+		resolver:            accesspoint.NewResolver(db),
 		envStore:            store.Of(db, bkmsenv.EnvMeta),
 		envVarsReader:       envVarsReader,
 		enqueueDynamicApply: enqueue,
 	}
 }
 
-// Create 创建北极星配置，并按需创建北极星服务实例
+// Create 创建北极星配置，并按需创建北极星服务实例。
+//
+// 配置的接入点由生效环境的集群绑定推导：所有环境必须解析出同一个接入点，
+// 生效范围为空时使用平台托管接入点（不可用时返回 ErrScopeEnvRequired）
 func (s *PolarisConfigService) Create(
 	ctx context.Context,
 	app *bkmsapp.Application,
@@ -89,11 +98,25 @@ func (s *PolarisConfigService) Create(
 	if config.Name == "" {
 		config.Name = config.GenerateName()
 	}
-	if err := s.checkResourceNamesInScope(ctx, app, config.Name, config.ScopeEnvNames); err != nil {
+	envs, err := s.listScopeEnvs(ctx, app, config.ScopeEnvNames)
+	if err != nil {
 		return err
 	}
+	if err = checkResourceNamesInEnvs(app, config.Name, envs); err != nil {
+		return err
+	}
+	ap, err := s.resolveCreateAccessPoint(ctx, app, envs)
+	if err != nil {
+		return err
+	}
+	if err = validateForAccessPoint(ap, config, createNewService); err != nil {
+		return err
+	}
+	config.AccessPointID = ap.ID
+
 	if createNewService {
 		result, err := s.platformManager.CreateService(ctx, &CreatePolarisServiceParams{
+			AccessPoint:        ap,
 			PolarisName:        config.PolarisName,
 			PolarisNamespace:   config.PolarisNamespace,
 			Operator:           config.Operator,
@@ -127,34 +150,103 @@ func (s *PolarisConfigService) Create(
 	return s.applyImmediately(ctx, app, config, config.ScopeEnvNames)
 }
 
-// GetImportedService 查询从现有引入的北极星服务信息。
-func (s *PolarisConfigService) GetImportedService(
-	ctx context.Context,
-	name, namespace, token string,
-) (*RemotePolarisService, error) {
-	return s.platformManager.GetImportedService(ctx, name, namespace, token)
+// resolveCreateAccessPoint 推导新建配置使用的接入点：生效范围内的环境必须解析出同一个接入点；
+// 生效范围为空时只能使用平台托管接入点，不可用（只允许空间自建接入点）时返回 ErrScopeEnvRequired
+func (s *PolarisConfigService) resolveCreateAccessPoint(
+	ctx context.Context, app *bkmsapp.Application, envs []bkmsenv.Environment,
+) (*accesspoint.AccessPoint, error) {
+	ap, err := s.resolveEnvsAccessPoint(ctx, app.WorkspaceID, envs)
+	if err != nil || ap != nil {
+		return ap, err
+	}
+	ap, err = s.resolver.ResolveByID(ctx, app.WorkspaceID, accesspoint.PlatformID)
+	if errors.Is(err, accesspoint.ErrAccessPointNotFound) {
+		return nil, errors.Wrap(ErrScopeEnvRequired, "platform polaris access point is unavailable")
+	}
+	if err != nil {
+		return nil, errors.Wrap(err, "resolve platform polaris access point")
+	}
+	return ap, nil
 }
 
-// UpdateImportedPolaris 修改已有北极星服务。目前只写权重因子开关，不回写本地配置。
+// validateForAccessPoint 按接入点能力校验新建配置：权重因子、引入已有服务时的服务 Token、命名空间
+func validateForAccessPoint(ap *accesspoint.AccessPoint, config *PolarisConfig, createNewService bool) error {
+	if config.EnableWeightFactor && !ap.Capabilities.WeightFactor {
+		return errors.Wrapf(ErrWeightFactorUnsupported, "polaris access point %q", ap.Name)
+	}
+	if !createNewService && ap.Capabilities.ServiceTokenRequired && config.PolarisToken == "" {
+		return ErrServiceTokenRequired
+	}
+	return validateNamespace(ap, config.PolarisNamespace)
+}
+
+// ResolveAccessPoint 解析应用所在空间的接入点，accessPointID 为空时表示平台托管接入点。
+// 用于创建配置前导入已有服务等还没有配置的场景
+func (s *PolarisConfigService) ResolveAccessPoint(
+	ctx context.Context, app *bkmsapp.Application, accessPointID string,
+) (*accesspoint.AccessPoint, error) {
+	accessPointID = lo.CoalesceOrEmpty(accessPointID, accesspoint.PlatformID)
+	ap, err := s.resolver.ResolveByID(ctx, app.WorkspaceID, accessPointID)
+	if err != nil {
+		return nil, errors.Wrapf(err, "resolve polaris access point %s", accessPointID)
+	}
+	return ap, nil
+}
+
+// GetImportedService 查询接入点上要引入的已有北极星服务信息。
+// 接入点要求服务 Token 时 token 必填并校验可写，否则忽略 token
+func (s *PolarisConfigService) GetImportedService(
+	ctx context.Context,
+	app *bkmsapp.Application,
+	accessPointID, name, namespace, token string,
+) (*RemotePolarisService, error) {
+	ap, err := s.ResolveAccessPoint(ctx, app, accessPointID)
+	if err != nil {
+		return nil, err
+	}
+	if ap.Capabilities.ServiceTokenRequired && token == "" {
+		return nil, ErrServiceTokenRequired
+	}
+	if err = validateNamespace(ap, namespace); err != nil {
+		return nil, err
+	}
+	return s.platformManager.GetImportedService(ctx, ap, name, namespace, token)
+}
+
+// UpdateImportedPolaris 修改接入点上已有的北极星服务。目前只写权重因子开关，不回写本地配置；
+// 接入点不支持权重因子时返回 ErrWeightFactorUnsupported
 func (s *PolarisConfigService) UpdateImportedPolaris(
 	ctx context.Context,
-	name, namespace, token string,
+	app *bkmsapp.Application,
+	accessPointID, name, namespace, token string,
 	enabled bool,
 ) error {
+	ap, err := s.ResolveAccessPoint(ctx, app, accessPointID)
+	if err != nil {
+		return err
+	}
+	if !ap.Capabilities.WeightFactor {
+		return errors.Wrapf(ErrWeightFactorUnsupported, "polaris access point %q", ap.Name)
+	}
+	if err = validateNamespace(ap, namespace); err != nil {
+		return err
+	}
 	return s.platformManager.UpdateImportedService(
-		ctx, name, namespace, token, &UpdateServiceParams{EnableWeightFactor: &enabled},
+		ctx, ap, name, namespace, token, &UpdateServiceParams{EnableWeightFactor: &enabled},
 	)
 }
 
-// GetRemoteServices 按配置名返回对应的北极星线上服务，同一 namespace/name 只查一次。
+// GetRemoteServices 按配置名返回对应的北极星线上服务，同一接入点上的 namespace/name 只查一次。
 // 查不到的配置对应值为 nil，不中断其余配置。
 func (s *PolarisConfigService) GetRemoteServices(
 	ctx context.Context,
+	app *bkmsapp.Application,
 	configs []*PolarisConfig,
 ) map[string]*RemotePolarisService {
 	type serviceKey struct {
-		namespace string
-		name      string
+		accessPointID string
+		namespace     string
+		name          string
 	}
 	cached := make(map[serviceKey]*RemotePolarisService, len(configs))
 	out := make(map[string]*RemotePolarisService, len(configs))
@@ -162,21 +254,35 @@ func (s *PolarisConfigService) GetRemoteServices(
 		if config == nil || config.Name == "" {
 			continue
 		}
-		key := serviceKey{namespace: config.PolarisNamespace, name: config.PolarisName}
+		key := serviceKey{
+			accessPointID: config.EffectiveAccessPointID(),
+			namespace:     config.PolarisNamespace,
+			name:          config.PolarisName,
+		}
 		svc, ok := cached[key]
 		if !ok {
-			var err error
-			svc, err = s.platformManager.GetService(ctx, config.PolarisName, config.PolarisNamespace)
-			if err != nil {
-				log.Errorf(ctx, "get polaris service failed, polaris=%s/%s: %v",
-					config.PolarisNamespace, config.PolarisName, err)
-				svc = nil
-			}
+			svc = s.getRemoteService(ctx, app, config)
 			cached[key] = svc
 		}
 		out[config.Name] = svc
 	}
 	return out
+}
+
+// getRemoteService 查询配置对应的北极星线上服务，失败时记录日志并返回 nil
+func (s *PolarisConfigService) getRemoteService(
+	ctx context.Context, app *bkmsapp.Application, config *PolarisConfig,
+) *RemotePolarisService {
+	ap, err := s.resolver.ResolveByID(ctx, app.WorkspaceID, config.EffectiveAccessPointID())
+	if err == nil {
+		var svc *RemotePolarisService
+		if svc, err = s.platformManager.GetService(ctx, ap, config.PolarisName, config.PolarisNamespace); err == nil {
+			return svc
+		}
+	}
+	log.Errorf(ctx, "get polaris service failed, polaris=%s/%s: %v",
+		config.PolarisNamespace, config.PolarisName, err)
+	return nil
 }
 
 // Update 更新北极星配置
@@ -187,9 +293,17 @@ func (s *PolarisConfigService) Update(
 	updateData *ConfigUpdateData,
 ) (*PolarisConfig, error) {
 	if updateData.ScopeEnvNames != nil {
-		if err := s.checkResourceNamesInScope(ctx, app, oldConfig.Name, updateData.ScopeEnvNames); err != nil {
+		if err := s.checkScopeUpdate(ctx, app, oldConfig, updateData.ScopeEnvNames); err != nil {
 			return nil, err
 		}
+	}
+	if updateData.EnableWeightFactor != nil && !oldConfig.Capabilities().WeightFactor {
+		if *updateData.EnableWeightFactor {
+			return nil, ErrWeightFactorUnsupported
+		}
+		// 不支持权重因子的接入点上本来就没有开启，关闭请求无需写回北极星
+		updateData = lo.ToPtr(*updateData)
+		updateData.EnableWeightFactor = nil
 	}
 	if err := s.syncPolarisService(ctx, oldConfig, updateData); err != nil {
 		return nil, err
@@ -269,13 +383,38 @@ func (s *PolarisConfigService) Delete(
 	return nil
 }
 
-// checkResourceNamesInScope 校验配置在生效范围内各环境中的 CR 名与 Service 名不超长。
-// 共用命名空间的环境创建时只校验应用自身的资源名，北极星资源名带 resourcePrefix 前缀后更长，在加入生效范围时校验。
-func (s *PolarisConfigService) checkResourceNamesInScope(
-	ctx context.Context, app *bkmsapp.Application, configName string, envNames []string,
+// checkScopeUpdate 校验新的生效范围：各环境中的资源名不超长，新加入的环境的集群必须绑定到配置固定的接入点
+func (s *PolarisConfigService) checkScopeUpdate(
+	ctx context.Context, app *bkmsapp.Application, config *PolarisConfig, scopeEnvNames []string,
 ) error {
+	envs, err := s.listScopeEnvs(ctx, app, scopeEnvNames)
+	if err != nil {
+		return err
+	}
+	if err = checkResourceNamesInEnvs(app, config.Name, envs); err != nil {
+		return err
+	}
+	added := lo.Filter(envs, func(env bkmsenv.Environment, _ int) bool {
+		return !config.IsAvailableInEnv(env.Name)
+	})
+	ap, err := s.resolveEnvsAccessPoint(ctx, app.WorkspaceID, added)
+	if err != nil {
+		return err
+	}
+	if ap != nil && ap.ID != config.EffectiveAccessPointID() {
+		return errors.Wrapf(ErrAccessPointMismatch,
+			"envs %v use polaris access point %q, but the config uses another one",
+			lo.Map(added, func(env bkmsenv.Environment, _ int) string { return env.Name }), ap.Name)
+	}
+	return nil
+}
+
+// listScopeEnvs 列出生效范围内应用可用的环境，不存在的环境名被忽略
+func (s *PolarisConfigService) listScopeEnvs(
+	ctx context.Context, app *bkmsapp.Application, envNames []string,
+) ([]bkmsenv.Environment, error) {
 	if len(envNames) == 0 {
-		return nil
+		return nil, nil
 	}
 	envs, err := s.envStore.List(ctx,
 		bkmsenv.InWorkspace(app.WorkspaceID),
@@ -283,11 +422,17 @@ func (s *PolarisConfigService) checkResourceNamesInScope(
 		store.Where("name", bson.M{"$in": envNames}),
 	)
 	if err != nil {
-		return errors.Wrap(err, "list scope envs")
+		return nil, errors.Wrap(err, "list scope envs")
 	}
+	return envs, nil
+}
+
+// checkResourceNamesInEnvs 校验配置在生效范围内各环境中的 CR 名与 Service 名不超长。
+// 共用命名空间的环境创建时只校验应用自身的资源名，北极星资源名带 resourcePrefix 前缀后更长，在加入生效范围时校验。
+func checkResourceNamesInEnvs(app *bkmsapp.Application, configName string, envs []bkmsenv.Environment) error {
 	for i := range envs {
 		crName, serviceName := PolarisResourceNames(&envs[i], app.Name, configName)
-		if err = checkResourceNames(&envs[i], crName, serviceName); err != nil {
+		if err := checkResourceNames(&envs[i], crName, serviceName); err != nil {
 			return err
 		}
 	}
@@ -483,6 +628,9 @@ func (s *PolarisConfigService) UpdateEnvWeight(
 	weight int32,
 	dynamicWeight *bool,
 ) (*PolarisConfig, error) {
+	if lo.FromPtr(dynamicWeight) && !config.Capabilities().WeightFactor {
+		return nil, errors.Wrap(ErrWeightFactorUnsupported, "dynamic weight requires weight factor")
+	}
 	isDeployed := config.GetEnvState(envName).IsDeployed()
 	if isDeployed {
 		if err := s.patchEnvWeight(
@@ -535,12 +683,13 @@ func (s *PolarisConfigService) syncPolarisService(
 		if updateData.PolarisToken != nil && *updateData.PolarisToken != "" {
 			token = *updateData.PolarisToken
 		}
-		return s.UpdateImportedPolaris(
-			ctx,
-			oldConfig.PolarisName,
-			oldConfig.PolarisNamespace,
-			token,
-			*updateData.EnableWeightFactor,
+		ap, err := s.resolver.ResolveForPolarisConfig(ctx, oldConfig)
+		if err != nil {
+			return errors.Wrap(err, "resolve polaris access point of config")
+		}
+		return s.platformManager.UpdateImportedService(
+			ctx, ap, oldConfig.PolarisName, oldConfig.PolarisNamespace, token,
+			&UpdateServiceParams{EnableWeightFactor: updateData.EnableWeightFactor},
 		)
 	}
 	if updateData.Operator == nil && updateData.EnableWeightFactor == nil {
